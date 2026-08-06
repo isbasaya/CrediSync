@@ -1,0 +1,322 @@
+/**
+ * CrediSync Design Tokens
+ *
+ * Single source of truth for the visual identity.
+ * Consumed by the Tailwind config (web) and referenced by the Flutter theme (mobile).
+ *
+ * Principles:
+ *  - Deep slate/blue palette → institutional trust
+ *  - High-contrast text pairs (WCAG AA minimum)
+ *  - Semantic status colours mapped 1-to-1 to credit-bureau score bands
+ *    and database status enum values
+ */
+
+// ---------------------------------------------------------------------------
+// Primitive palette (raw HEX values)
+// ---------------------------------------------------------------------------
+export const primitives = {
+  // Brand blues / slates
+  navy950:  '#040D1A',
+  navy900:  '#071428',
+  navy800:  '#0D2247',
+  navy700:  '#0F3460',
+  navy600:  '#1A4F8A',
+  navy500:  '#2563EB',
+  navy400:  '#3B82F6',
+  navy300:  '#93C5FD',
+  navy200:  '#BFDBFE',
+  navy100:  '#DBEAFE',
+  navy050:  '#EFF6FF',
+
+  // Neutrals
+  slate900: '#0F172A',
+  slate800: '#1E293B',
+  slate700: '#334155',
+  slate600: '#475569',
+  slate500: '#64748B',
+  slate400: '#94A3B8',
+  slate300: '#CBD5E1',
+  slate200: '#E2E8F0',
+  slate100: '#F1F5F9',
+  slate050: '#F8FAFC',
+  white:    '#FFFFFF',
+
+  // Semantic status (score bands)
+  green700: '#15803D',
+  green600: '#16A34A',
+  green500: '#22C55E',
+  green100: '#DCFCE7',
+
+  amber700: '#B45309',
+  amber600: '#D97706',
+  amber500: '#F59E0B',
+  amber100: '#FEF3C7',
+
+  red700:   '#B91C1C',
+  red600:   '#DC2626',
+  red500:   '#EF4444',
+  red100:   '#FEE2E2',
+
+  // Accent / highlight
+  teal600:  '#0D9488',
+  teal500:  '#14B8A6',
+  teal100:  '#CCFBF1',
+} as const;
+
+// ---------------------------------------------------------------------------
+// Semantic tokens (purpose-driven aliases)
+// ---------------------------------------------------------------------------
+export const semantic = {
+  // Backgrounds
+  bgBase:        primitives.navy900,
+  bgSurface:     primitives.navy800,
+  bgCard:        primitives.navy700,
+  bgMuted:       primitives.slate800,
+  bgSubtle:      primitives.slate100,
+
+  // Text
+  textPrimary:   primitives.white,
+  textSecondary: primitives.slate300,
+  textMuted:     primitives.slate400,
+  textInverse:   primitives.slate900,
+  textLink:      primitives.navy400,
+  textLinkHover: primitives.navy300,
+
+  // Borders
+  borderDefault: primitives.navy600,
+  borderSubtle:  primitives.slate700,
+  borderFocus:   primitives.navy400,
+
+  // Brand
+  brandPrimary:  primitives.navy500,
+  brandHover:    primitives.navy600,
+  brandActive:   primitives.navy700,
+
+  // --- Score band / bureau status tokens ---
+  // Maps directly to PostgreSQL enum values (see db/schema.sql)
+  //   score_band: 'excellent' | 'good' | 'fair' | 'poor' | 'very_poor'
+  //   account_status: 'current' | 'arrears' | 'default' | 'judgement' | 'written_off'
+
+  statusExcellentBg:   primitives.green100,
+  statusExcellentFg:   primitives.green700,
+  statusExcellentIcon: primitives.green500,
+
+  statusGoodBg:        primitives.green100,
+  statusGoodFg:        primitives.green600,
+  statusGoodIcon:      primitives.green500,
+
+  statusFairBg:        primitives.amber100,
+  statusFairFg:        primitives.amber700,
+  statusFairIcon:      primitives.amber500,
+
+  statusPoorBg:        primitives.amber100,
+  statusPoorFg:        primitives.amber600,
+  statusPoorIcon:      primitives.amber500,
+
+  statusVeryPoorBg:    primitives.red100,
+  statusVeryPoorFg:    primitives.red700,
+  statusVeryPoorIcon:  primitives.red500,
+
+  // Account status
+  statusCurrentBg:     primitives.green100,
+  statusCurrentFg:     primitives.green700,
+
+  statusArrearsBg:     primitives.amber100,
+  statusArrearsFg:     primitives.amber700,
+
+  statusDefaultBg:     primitives.red100,
+  statusDefaultFg:     primitives.red700,
+
+  statusJudgementBg:   primitives.red100,
+  statusJudgementFg:   primitives.red700,
+
+  statusWrittenOffBg:  primitives.slate100,
+  statusWrittenOffFg:  primitives.slate600,
+
+  // Alerts / toasts
+  alertSuccess:  primitives.green500,
+  alertWarning:  primitives.amber500,
+  alertError:    primitives.red500,
+  alertInfo:     primitives.navy400,
+} as const;
+
+// ---------------------------------------------------------------------------
+// Typography
+// ---------------------------------------------------------------------------
+export const typography = {
+  fontFamilySans:  "'Inter', 'DM Sans', ui-sans-serif, system-ui, sans-serif",
+  fontFamilyMono:  "'JetBrains Mono', 'Fira Code', ui-monospace, monospace",
+
+  // Scale (rem, base 16 px)
+  size3xl:  '1.875rem', // 30 px – hero numbers (credit score display)
+  size2xl:  '1.5rem',   // 24 px – section headings
+  sizeXl:   '1.25rem',  // 20 px – card headings
+  sizeLg:   '1.125rem', // 18 px – sub-headings
+  sizeMd:   '1rem',     // 16 px – body
+  sizeSm:   '0.875rem', // 14 px – secondary body
+  sizeXs:   '0.75rem',  // 12 px – labels, badges
+
+  weightLight:    '300',
+  weightRegular:  '400',
+  weightMedium:   '500',
+  weightSemibold: '600',
+  weightBold:     '700',
+
+  lineHeightTight:  '1.25',
+  lineHeightNormal: '1.5',
+  lineHeightRelaxed:'1.625',
+
+  letterSpacingTight: '-0.025em',
+  letterSpacingNormal: '0em',
+  letterSpacingWide:   '0.025em',
+  letterSpacingWidest: '0.1em',   // uppercase labels/badges
+} as const;
+
+// ---------------------------------------------------------------------------
+// Spacing (4-point grid)
+// ---------------------------------------------------------------------------
+export const spacing = {
+  px:  '1px',
+  s0:  '0',
+  s1:  '0.25rem',  // 4 px
+  s2:  '0.5rem',   // 8 px
+  s3:  '0.75rem',  // 12 px
+  s4:  '1rem',     // 16 px
+  s5:  '1.25rem',  // 20 px
+  s6:  '1.5rem',   // 24 px
+  s8:  '2rem',     // 32 px
+  s10: '2.5rem',   // 40 px
+  s12: '3rem',     // 48 px
+  s16: '4rem',     // 64 px
+  s20: '5rem',     // 80 px
+  s24: '6rem',     // 96 px
+} as const;
+
+// ---------------------------------------------------------------------------
+// Border radii
+// ---------------------------------------------------------------------------
+export const radii = {
+  none:  '0',
+  sm:    '0.25rem',  // 4 px
+  md:    '0.5rem',   // 8 px
+  lg:    '0.75rem',  // 12 px
+  xl:    '1rem',     // 16 px
+  '2xl': '1.5rem',   // 24 px
+  full:  '9999px',
+} as const;
+
+// ---------------------------------------------------------------------------
+// Shadows (dark-theme optimised – use glow rather than drop shadows)
+// ---------------------------------------------------------------------------
+export const shadows = {
+  sm:   '0 1px 2px 0 rgba(0,0,0,0.40)',
+  md:   '0 4px 6px -1px rgba(0,0,0,0.50), 0 2px 4px -2px rgba(0,0,0,0.40)',
+  lg:   '0 10px 15px -3px rgba(0,0,0,0.60), 0 4px 6px -4px rgba(0,0,0,0.40)',
+  glow: '0 0 20px 0 rgba(37,99,235,0.35)',   // brand blue glow for focus rings
+} as const;
+
+// ---------------------------------------------------------------------------
+// Breakpoints (mobile-first, SA landscape)
+// ---------------------------------------------------------------------------
+export const breakpoints = {
+  xs:  '360px',   // entry-level Android
+  sm:  '640px',
+  md:  '768px',
+  lg:  '1024px',
+  xl:  '1280px',
+  '2xl': '1536px',
+} as const;
+
+// ---------------------------------------------------------------------------
+// Z-index scale
+// ---------------------------------------------------------------------------
+export const zIndex = {
+  base:    0,
+  raised:  10,
+  dropdown:20,
+  sticky:  30,
+  overlay: 40,
+  modal:   50,
+  toast:   60,
+} as const;
+
+// ---------------------------------------------------------------------------
+// Transition / animation
+// ---------------------------------------------------------------------------
+export const motion = {
+  durationFast:   '150ms',
+  durationNormal: '200ms',
+  durationSlow:   '350ms',
+  easingDefault:  'cubic-bezier(0.4, 0, 0.2, 1)',
+  easingIn:       'cubic-bezier(0.4, 0, 1, 1)',
+  easingOut:      'cubic-bezier(0, 0, 0.2, 1)',
+} as const;
+
+// ---------------------------------------------------------------------------
+// Score band helper (used by both frontend and Node.js services)
+// ---------------------------------------------------------------------------
+export type ScoreBand = 'excellent' | 'good' | 'fair' | 'poor' | 'very_poor';
+
+export function getScoreBand(score: number): ScoreBand {
+  if (score >= 767) return 'excellent';
+  if (score >= 681) return 'good';
+  if (score >= 614) return 'fair';
+  if (score >= 583) return 'poor';
+  return 'very_poor';
+}
+
+export interface ScoreBandToken {
+  bg:   string;
+  fg:   string;
+  icon: string;
+  label: string;
+}
+
+export const scoreBandTokens: Record<ScoreBand, ScoreBandToken> = {
+  excellent: {
+    bg:    semantic.statusExcellentBg,
+    fg:    semantic.statusExcellentFg,
+    icon:  semantic.statusExcellentIcon,
+    label: 'Excellent',
+  },
+  good: {
+    bg:    semantic.statusGoodBg,
+    fg:    semantic.statusGoodFg,
+    icon:  semantic.statusGoodIcon,
+    label: 'Good',
+  },
+  fair: {
+    bg:    semantic.statusFairBg,
+    fg:    semantic.statusFairFg,
+    icon:  semantic.statusFairIcon,
+    label: 'Fair',
+  },
+  poor: {
+    bg:    semantic.statusPoorBg,
+    fg:    semantic.statusPoorFg,
+    icon:  semantic.statusPoorIcon,
+    label: 'Poor',
+  },
+  very_poor: {
+    bg:    semantic.statusVeryPoorBg,
+    fg:    semantic.statusVeryPoorFg,
+    icon:  semantic.statusVeryPoorIcon,
+    label: 'Very Poor',
+  },
+};
+
+export type AccountStatus = 'current' | 'arrears' | 'default' | 'judgement' | 'written_off';
+
+export interface AccountStatusToken {
+  bg: string;
+  fg: string;
+  label: string;
+}
+
+export const accountStatusTokens: Record<AccountStatus, AccountStatusToken> = {
+  current:    { bg: semantic.statusCurrentBg,    fg: semantic.statusCurrentFg,    label: 'Current'     },
+  arrears:    { bg: semantic.statusArrearsBg,    fg: semantic.statusArrearsFg,    label: 'In Arrears'  },
+  default:    { bg: semantic.statusDefaultBg,    fg: semantic.statusDefaultFg,    label: 'Default'     },
+  judgement:  { bg: semantic.statusJudgementBg,  fg: semantic.statusJudgementFg,  label: 'Judgement'   },
+  written_off:{ bg: semantic.statusWrittenOffBg, fg: semantic.statusWrittenOffFg, label: 'Written Off' },
+};
