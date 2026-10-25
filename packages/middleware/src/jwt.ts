@@ -41,9 +41,11 @@ declare global {
   }
 }
 
-function secret(): string {
-  return requireSecret('JWT_SECRET', { devFallback: DEV_JWT_SECRET });
+export function jwtSecret(env: NodeJS.ProcessEnv = process.env): string {
+  return requireSecret('JWT_SECRET', { devFallback: DEV_JWT_SECRET }, env);
 }
+
+const secret = () => jwtSecret();
 
 export function signAccessToken(claims: AccessTokenClaims): string {
   return jwt.sign({ email: claims.email, role: claims.role, verified: claims.verified }, secret(), {

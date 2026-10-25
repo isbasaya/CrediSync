@@ -1,8 +1,11 @@
 import pino from 'pino';
 import { createPool } from '@credisync/db';
+import { verifyStartupConfig } from '@credisync/middleware';
 import { createApp, loadConfig } from './app';
 
 const logger = pino({ name: 'api-gateway' });
+// Fail at boot, not on the first request, if a secret is missing.
+verifyStartupConfig({ jwt: true, database: true });
 const pool = createPool();
 const app = createApp(pool, loadConfig());
 

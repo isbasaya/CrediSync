@@ -25,9 +25,9 @@ Give South African consumers one real-time, trustworthy view of their credit sta
 
 ## Operating Context
 
-- Regulated under **POPIA** (data minimisation, consent tracking, purpose limitation, access logs) and the **National Credit Act** (dispute record retention, dispute workflow requirements); SA ID numbers are encrypted at rest (pgcrypto AES-256-CBC) with row-level security on sensitive tables.
+- Regulated under **POPIA** (data minimisation, consent tracking, purpose limitation, access logs) and the **National Credit Act** (dispute record retention, dispute workflow requirements); SA ID numbers are encrypted at rest (application-layer AES-256-GCM envelope encryption, AWS KMS in af-south-1) and row-level security is enforced on every personal-information table.
 - Three live bureau integrations: TransUnion, Experian, XDS. Scores roll up to a five-band scale — excellent (767+) / good (681+) / fair (614+) / poor (583+) / very_poor — shared verbatim across web, admin, and mobile.
-- Dispute lifecycle: `draft → submitted → under_review → resolved_upheld | resolved_rejected → escalated_ncr` (escalation to the National Credit Regulator).
+- Dispute lifecycle: `draft → submitted → under_review → resolved_upheld | resolved_rejected → escalated_ncr` (escalation via the Credit Ombud / National Credit Regulator, allowed after a rejection or a missed 20-business-day deadline).
 - Open-banking transaction categorisation (income, housing, transport, debt repayment, etc.) feeds affordability and bank-readiness scoring.
 - Backing services: `api-gateway`, `auth`, `bureau-ingestion`, `dispute-engine`, `open-banking`, plus an `ai/bank-readiness` scoring service.
 - Only an authenticated dashboard exists on web today — no public marketing/landing site is built or confirmed planned.

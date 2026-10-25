@@ -33,3 +33,4 @@ export {
   type AuthenticatedUser,
   type Role,
 } from './jwt';
+export { verifyStartupConfig, type StartupRequirements } from './startup';

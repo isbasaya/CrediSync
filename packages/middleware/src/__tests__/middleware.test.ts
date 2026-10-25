@@ -209,3 +209,39 @@ describe('access tokens', () => {
     expect(res.statusCode).toBe(403);
   });
 });
+
+import { verifyStartupConfig } from '../startup';
+
+describe('verifyStartupConfig', () => {
+  it('fails fast in production when secrets are missing', () => {
+    expect(() => verifyStartupConfig({ jwt: true }, { NODE_ENV: 'production' })).toThrow(
+      /INTERNAL_SERVICE_TOKEN/,
+    );
+    expect(() =>
+      verifyStartupConfig(
+        { jwt: true },
+        { NODE_ENV: 'production', INTERNAL_SERVICE_TOKEN: 'x'.repeat(40) },
+      ),
+    ).toThrow(/JWT_SECRET/);
+  });
+
+  it('passes in production when every required secret is set', () => {
+    const env = {
+      NODE_ENV: 'production',
+      INTERNAL_SERVICE_TOKEN: 'i'.repeat(40),
+      JWT_SECRET: 'j'.repeat(40),
+      HMAC_KEY: 'h'.repeat(40),
+      ENCRYPTION_MASTER_KEY: 'a'.repeat(64),
+      DATABASE_URL: 'postgres://u:p@db:5432/credisync',
+    };
+    expect(() =>
+      verifyStartupConfig({ jwt: true, hmac: true, encryption: true, database: true }, env),
+    ).not.toThrow();
+  });
+
+  it('allows development fallbacks', () => {
+    expect(() =>
+      verifyStartupConfig({ jwt: true, hmac: true, encryption: true }, { NODE_ENV: 'development' }),
+    ).not.toThrow();
+  });
+});

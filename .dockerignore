@@ -9,3 +9,15 @@ coverage
 .env.*.local
 *.tfstate
 .terraform
+
+# Build output and local data never go into images
+**/node_modules
+**/dist
+**/.next
+**/coverage
+**/*.tsbuildinfo
+mobile
+.claude
+.impeccable
+.github
+**/.env

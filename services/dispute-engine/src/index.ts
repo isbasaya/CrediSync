@@ -1,8 +1,11 @@
 import pino from 'pino';
 import { createPool } from '@credisync/db';
+import { verifyStartupConfig } from '@credisync/middleware';
 import { createApp } from './app';
 
 const logger = pino({ name: 'dispute-engine' });
+// Fail at boot, not on the first request, if a secret is missing.
+verifyStartupConfig({ encryption: true, database: true });
 const pool = createPool();
 const app = createApp(pool);
 
