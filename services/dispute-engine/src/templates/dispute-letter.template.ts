@@ -1,4 +1,5 @@
 import type { AccountContext, ConsumerContext, DisputeReason, BureauSource } from '../types';
+import { bureauContacts, CITATIONS, LEGAL_REVIEW } from './legal-references';
 
 /** Human-readable ground-of-dispute clause, keyed by DisputeReason. */
 const REASON_CLAUSES: Record<DisputeReason, string> = {
@@ -31,10 +32,13 @@ const REASON_CLAUSES: Record<DisputeReason, string> = {
     'incorrect and require correction.',
 };
 
-const BUREAU_DISPUTE_ADDRESS: Record<BureauSource, string> = {
-  transunion: 'TransUnion South Africa — Consumer Disputes Department, PO Box 4041, Johannesburg, 2000',
-  experian: 'Experian South Africa — Consumer Affairs Department, PO Box 214, Johannesburg, 2000',
-  xds: 'XDS (Pty) Ltd — Consumer Disputes Department, PO Box 3007, Rivonia, 2128',
+const STATUS_LABELS: Record<string, string> = {
+  current: 'Current',
+  arrears: 'In arrears',
+  default: 'In default',
+  judgement: 'Judgement',
+  written_off: 'Written off',
+  unknown: 'Not stated',
 };
 
 function formatCurrency(amount: number): string {
@@ -42,7 +46,19 @@ function formatCurrency(amount: number): string {
 }
 
 function formatDate(date: Date): string {
-  return date.toLocaleDateString('en-ZA', { year: 'numeric', month: 'long', day: 'numeric' });
+  return date.toLocaleDateString('en-ZA', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Africa/Johannesburg' });
+}
+
+/** Keeps the consumer's free text from breaking the letter layout or smuggling control characters. */
+function sanitiseStatement(text: string): string {
+  return text
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
+    .replace(/\r\n?/g, '\n')
+    .trim()
+    .slice(0, 4000)
+    .split('\n')
+    .map((line) => `  ${line}`)
+    .join('\n');
 }
 
 export interface DisputeLetterInput {
@@ -51,60 +67,60 @@ export interface DisputeLetterInput {
   bureau: BureauSource;
   reason: DisputeReason;
   description: string;
+  hasEvidence?: boolean;
   today?: Date;
 }
 
 /**
- * Generates the body of an NCA/NCR-compliant dispute letter. Output is
- * stored verbatim in `disputes.letter_content` and re-rendered to
- * PDF/email at submission time — this function only produces the text.
+ * Generates the text of a consumer dispute letter. Stored verbatim in
+ * disputes.letter_content. The stored copy shows a masked ID number; the
+ * submission channel attaches the full identifier securely when sending.
  */
 export function generateDisputeLetter(input: DisputeLetterInput): string {
   const { consumer, account, bureau, reason, description } = input;
   const today = input.today ?? new Date();
+  const contact = bureauContacts()[bureau];
+  const addressee = contact.verified && contact.disputeChannel ? `${contact.displayName}\n${contact.disputeChannel}` : contact.displayName;
+  const draftNotice = LEGAL_REVIEW.reviewed ? '' : '[DRAFT — statutory references pending legal review]\n\n';
 
-  return `${formatDate(today)}
+  return `${draftNotice}${formatDate(today)}
 
-${BUREAU_DISPUTE_ADDRESS[bureau]}
+${addressee}
 
-RE: FORMAL DISPUTE OF CREDIT INFORMATION — SECTION 71, NATIONAL CREDIT ACT 34 OF 2005
+RE: DISPUTE OF CREDIT INFORMATION — ${CITATIONS.challengeRight.toUpperCase()}
 
-Consumer Details:
+Consumer details:
   Name: ${consumer.fullName}
-  ID Number: ${consumer.saIdMasked}
+  ID number: ${consumer.saIdMasked}
   Mobile: ${consumer.mobileNumber}
   Email: ${consumer.email}
 
-Disputed Account Details:
+Disputed account (as reported by the bureau):
   Creditor: ${account.creditorName}
-  Account Type: ${account.accountType}
-  Account Reference: ${account.accountReference}
-  Reported Balance: ${formatCurrency(account.currentBalance)}
-  Reported Overdue Amount: ${formatCurrency(account.overdueAmount)}
-  Reported Status: ${account.status}
+  Account type: ${account.accountType}
+  Account reference: ${account.accountReference}
+  Reported balance: ${formatCurrency(account.currentBalance)}
+  Reported overdue amount: ${formatCurrency(account.overdueAmount)}
+  Reported status: ${STATUS_LABELS[account.status] ?? account.status}
 
-Ground of Dispute:
+Ground of dispute:
   ${REASON_CLAUSES[reason]}
 
-Consumer's Statement:
-  ${description}
+Consumer's statement:
+${sanitiseStatement(description)}
 
-In terms of Section 71 of the National Credit Act 34 of 2005, I request that you:
-  1. Take reasonable steps to investigate the accuracy of the disputed information within 20 business days
-     of receipt of this dispute;
-  2. Take reasonable steps to correct or remove any information found to be inaccurate, obsolete, or
-     unverifiable;
-  3. Notify me in writing of the outcome of your investigation and any resulting amendment to my credit
-     record.
+In terms of ${CITATIONS.challengeRight}, and my right to correction of personal information under
+${CITATIONS.popiaCorrection}, I request that you:
+  1. Take reasonable steps to investigate the accuracy of the disputed information and respond within
+     ${CITATIONS.responsePeriod} of receipt of this dispute;
+  2. Correct or remove any information found to be inaccurate, incomplete, out of date or unverifiable;
+  3. Notify me in writing of the outcome of your investigation and of any amendment to my credit record.
 
-Should this dispute not be resolved to my satisfaction within the statutory period, I reserve the right to
-escalate this matter to the National Credit Regulator (NCR) in terms of Section 141 of the National Credit
-Act.
-
-I have attached supporting evidence in relation to this dispute where applicable.
-
+If this dispute is not resolved to my satisfaction within that period, I reserve the right to refer the
+matter to ${CITATIONS.escalation}.
+${input.hasEvidence ? '\nSupporting evidence is attached.\n' : ''}
 Yours faithfully,
 
 ${consumer.fullName}
-Submitted via CrediSync on behalf of the consumer named above.`;
+Submitted via CrediSync on behalf of, and with the consent of, the consumer named above.`;
 }

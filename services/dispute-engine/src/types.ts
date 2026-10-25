@@ -1,29 +1,10 @@
 /**
- * Domain types for the dispute-engine service. Must stay aligned with
- * db/schema.sql's `disputes` table and `dispute_status` enum.
+ * Domain types for the dispute-engine service. Enum types come from
+ * @credisync/types, which is checked against db/schema.sql by a test.
  */
-
-export type DisputeStatus =
-  | 'draft'
-  | 'submitted'
-  | 'under_review'
-  | 'resolved_upheld'
-  | 'resolved_rejected'
-  | 'escalated_ncr';
-
-export type BureauSource = 'transunion' | 'experian' | 'xds';
-
-/** NCA-recognised dispute grounds; drives which letter template clause is used. */
-export type DisputeReason =
-  | 'not_my_account'
-  | 'incorrect_balance'
-  | 'incorrect_status'
-  | 'paid_but_reflecting_outstanding'
-  | 'duplicate_listing'
-  | 'identity_theft_fraud'
-  | 'settled_in_full_not_updated'
-  | 'prescribed_debt'
-  | 'incorrect_personal_details';
+export type { BureauSource, DisputeReason, DisputeStatus } from '@credisync/types';
+export { DISPUTE_REASONS, BUREAU_SOURCES } from '@credisync/types';
+import type { BureauSource, DisputeReason, DisputeStatus } from '@credisync/types';
 
 export interface DisputeRecord {
   id: string;
@@ -32,7 +13,7 @@ export interface DisputeRecord {
   bureau: BureauSource;
   disputeReason: DisputeReason;
   disputeDescription: string;
-  supportingEvidence: string[]; // S3 object keys
+  supportingEvidence: string[]; // storage object keys
   status: DisputeStatus;
 
   letterContent: string | null;
@@ -40,16 +21,23 @@ export interface DisputeRecord {
   letterVersion: number;
 
   submittedAt: string | null;
+  submissionChannel: string | null;
   bureauReference: string | null;
   bureauResponse: string | null;
   bureauRespondedAt: string | null;
+  resolvedAt: string | null;
 
   ncrCaseNumber: string | null;
   ncrEscalatedAt: string | null;
 
-  resolutionDeadline: string | null; // date, NCA s71: 20 business days from submission
+  resolutionDeadline: string | null; // 20 business days from submission
+  deadlineBreachedAt: string | null;
   createdAt: string;
   updatedAt: string;
+
+  /** Joined from bureau_accounts for display. */
+  creditorName?: string;
+  accountType?: string;
 }
 
 export interface AccountContext {
@@ -63,7 +51,7 @@ export interface AccountContext {
 
 export interface ConsumerContext {
   fullName: string;
-  saIdMasked: string; // e.g. "8501**-****-**5" — never full ID in a generated letter
+  saIdMasked: string; // e.g. "*********9087" — never the full ID in a stored letter
   mobileNumber: string;
   email: string;
 }

@@ -1,6 +1,8 @@
 /**
- * NCA Section 71 requires credit bureaus to investigate and respond to a
- * dispute within 20 business days of submission. "Business day" excludes
+ * Credit bureaus must take reasonable steps to investigate a consumer's
+ * challenge and respond within 20 business days (NCA s72 read with the
+ * regulations — confirm the exact citation with counsel; see
+ * templates/legal-references.ts). "Business day" excludes
  * Saturdays, Sundays, and South African public holidays (Public Holidays
  * Act 36 of 1994) — including the "Monday rule" (s2(1)): when a holiday
  * falls on a Sunday, the following Monday is also a public holiday.
@@ -76,23 +78,35 @@ function southAfricanPublicHolidays(year: number): Set<string> {
   return withRollForward;
 }
 
-function isBusinessDay(date: Date): boolean {
+function isBusinessDay(date: Date, extraHolidays: ReadonlySet<string>): boolean {
   const day = date.getUTCDay();
   if (day === 0 || day === 6) return false; // Sunday, Saturday
-  return !southAfricanPublicHolidays(date.getUTCFullYear()).has(toDateKey(date));
+  const key = toDateKey(date);
+  return !southAfricanPublicHolidays(date.getUTCFullYear()).has(key) && !extraHolidays.has(key);
+}
+
+/** The calendar date in South Africa (SAST, UTC+2, no daylight saving) for an instant. */
+export function southAfricanDate(instant: Date): Date {
+  const key = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Johannesburg' }).format(instant); // YYYY-MM-DD
+  const [y, m, d] = key.split('-').map(Number) as [number, number, number];
+  return new Date(Date.UTC(y, m - 1, d));
 }
 
 /**
  * Adds `businessDays` business days to `startDate` (the dispute submission
  * date), skipping weekends and SA public holidays.
  */
-export function addBusinessDays(startDate: Date, businessDays: number): Date {
+export function addBusinessDays(
+  startDate: Date,
+  businessDays: number,
+  extraHolidays: ReadonlySet<string> = new Set()
+): Date {
   let current = new Date(startDate.getTime());
   let remaining = businessDays;
 
   while (remaining > 0) {
     current = addDays(current, 1);
-    if (isBusinessDay(current)) {
+    if (isBusinessDay(current, extraHolidays)) {
       remaining -= 1;
     }
   }
@@ -100,9 +114,13 @@ export function addBusinessDays(startDate: Date, businessDays: number): Date {
   return current;
 }
 
-const NCA_SECTION_71_BUSINESS_DAYS = 20;
+export const STATUTORY_RESPONSE_BUSINESS_DAYS = 20;
 
-/** Resolution deadline date (YYYY-MM-DD) for a dispute submitted on `submittedAt`. */
-export function computeResolutionDeadline(submittedAt: Date): string {
-  return toDateKey(addBusinessDays(submittedAt, NCA_SECTION_71_BUSINESS_DAYS));
+/**
+ * Resolution deadline (YYYY-MM-DD) for a dispute submitted at `submittedAt`.
+ * `extraHolidays` holds one-off holidays declared under the Public Holidays
+ * Act (table public_holiday_overrides), as YYYY-MM-DD keys.
+ */
+export function computeResolutionDeadline(submittedAt: Date, extraHolidays: ReadonlySet<string> = new Set()): string {
+  return toDateKey(addBusinessDays(southAfricanDate(submittedAt), STATUTORY_RESPONSE_BUSINESS_DAYS, extraHolidays));
 }
