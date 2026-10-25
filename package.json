@@ -7,7 +7,8 @@
     "packages/*",
     "services/*",
     "web",
-    "ai/bank-readiness"
+    "admin",
+    "e2e"
   ],
   "scripts": {
     "build": "npm run build --workspaces",

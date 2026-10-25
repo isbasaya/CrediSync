@@ -1,0 +1,20 @@
+{
+  "name": "@credisync/e2e",
+  "version": "0.1.0",
+  "private": true,
+  "description": "End-to-end tests: every service in-process behind the real gateway, on a throwaway Postgres database",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@credisync/db": "*",
+    "@credisync/middleware": "*",
+    "@credisync/notifications": "*",
+    "@types/node": "^20.14.10",
+    "@types/supertest": "^6.0.2",
+    "supertest": "^7.0.0",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.0"
+  }
+}

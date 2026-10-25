@@ -28,14 +28,36 @@ export interface NotificationProvider {
   sendSms(notification: SmsNotification): Promise<NotificationResult>;
 }
 
+/** Masks a recipient for logs: t***@example.co.za, +2782*****67. */
+export function maskRecipient(to: string): string {
+  if (to.includes('@')) {
+    const [local, domain] = to.split('@');
+    return `${(local ?? '').slice(0, 1)}***@${domain ?? ''}`;
+  }
+  return to.length > 6 ? `${to.slice(0, 5)}*****${to.slice(-2)}` : '*****';
+}
+
+/**
+ * Development provider: logs instead of sending. Recipients are masked;
+ * message bodies (which can contain verification links) are logged only
+ * when NODE_ENV=development.
+ */
 export class ConsoleNotificationProvider implements NotificationProvider {
+  private readonly showBody = process.env.NODE_ENV === 'development';
+
   async sendEmail(notification: EmailNotification): Promise<NotificationResult> {
-    logger.info({ to: notification.to, subject: notification.subject }, 'email notification (console)');
+    logger.info(
+      { to: maskRecipient(notification.to), subject: notification.subject, ...(this.showBody ? { body: notification.body } : {}) },
+      'email notification (console)'
+    );
     return { success: true, channel: 'email', messageId: `console-${Date.now()}` };
   }
 
   async sendSms(notification: SmsNotification): Promise<NotificationResult> {
-    logger.info({ to: notification.to, message: notification.message }, 'sms notification (console)');
+    logger.info(
+      { to: maskRecipient(notification.to), ...(this.showBody ? { message: notification.message } : {}) },
+      'sms notification (console)'
+    );
     return { success: true, channel: 'sms', messageId: `console-${Date.now()}` };
   }
 }
