@@ -1,46 +1,47 @@
-import { randomUUID } from 'crypto';
-import { creditorNameSimilarity, amountCloseness, dateCloseness } from './similarity';
+import { createHash } from 'crypto';
+import { accountTypeSimilarity, amountCloseness, creditorNameSimilarity, dateCloseness } from './similarity';
 import type { NormalizedBureauAccount, ResolvedAccountCluster } from '../types';
 
 /**
- * AI Entity Resolution Engine (v1 — deterministic weighted-feature matcher).
+ * Entity Resolution Engine (v2 — deterministic weighted-feature matcher).
  *
- * Same real-world credit facility is frequently reported by 1-3 bureaus
- * under different account references, and sometimes slightly different
- * creditor names / balances (reporting lag). This clusters accounts that
- * likely represent the same facility so the UI shows one line item with
- * per-bureau provenance, instead of duplicating debt 2-3x in a user's
- * exposure totals.
+ * The same real-world credit facility is often reported by 1–3 bureaus under
+ * different account references and slightly different creditor names or
+ * balances (reporting lag). Clustering them stops the same debt being
+ * counted two or three times in a consumer's exposure.
  *
- * Matching is same-bureau-exclusive (an account never merges with another
- * account from the same bureau) and weighted across four signals:
- *   - creditor name similarity   (0.40) — strongest signal, least noisy
- *   - opening balance/limit      (0.25) — bureaus report near-identical limits
- *   - current balance closeness  (0.20) — drifts with reporting lag, lower weight
- *   - opened-date closeness      (0.15) — bureaus sometimes report onboarding date differently
+ * Rules:
+ *   - never merge two accounts from the same bureau;
+ *   - never merge accounts of clearly different product types (a bank's
+ *     credit card and home loan share a creditor name but are different
+ *     facilities);
+ *   - otherwise score five signals and merge at >= MERGE_THRESHOLD.
  *
- * A pair merges when weightedScore >= MERGE_THRESHOLD. This is a
- * deterministic, auditable v1; `entity_resolution_ver` in credit_profiles
- * exists precisely so a future ML-based resolver (Python, trained on
- * confirmed-merge labels) can be versioned in without breaking historical
- * profiles.
+ * Input is sorted before matching so the result does not depend on the
+ * order bureaus responded in, and cluster ids are derived from member
+ * references so re-running on the same data gives the same ids.
  */
 
+export const ENTITY_RESOLUTION_VERSION = 2;
+
 const WEIGHTS = {
-  creditorName: 0.4,
-  limit: 0.25,
-  balance: 0.2,
+  creditorName: 0.35,
+  accountType: 0.15,
+  limit: 0.2,
+  balance: 0.15,
   openedDate: 0.15,
 } as const;
 
 const MERGE_THRESHOLD = 0.72;
+/** Below this, account types are treated as different products (hard block). */
+const ACCOUNT_TYPE_BLOCK = 0.5;
 
-interface TaggedAccount {
-  account: NormalizedBureauAccount;
-  bureauIndex: number; // index into the input array, used to forbid same-bureau merges
-}
+const BUREAU_PRIORITY: Record<string, number> = { transunion: 0, experian: 1, xds: 2 };
 
-function pairScore(a: NormalizedBureauAccount, b: NormalizedBureauAccount): number {
+export function pairScore(a: NormalizedBureauAccount, b: NormalizedBureauAccount): number {
+  const typeScore = accountTypeSimilarity(a.accountType, b.accountType);
+  if (typeScore < ACCOUNT_TYPE_BLOCK) return 0;
+
   const nameScore = creditorNameSimilarity(a.creditorName, b.creditorName);
   const limitScore =
     a.creditLimit !== null && b.creditLimit !== null ? amountCloseness(a.creditLimit, b.creditLimit) : 0.5;
@@ -49,78 +50,86 @@ function pairScore(a: NormalizedBureauAccount, b: NormalizedBureauAccount): numb
 
   return (
     nameScore * WEIGHTS.creditorName +
+    typeScore * WEIGHTS.accountType +
     limitScore * WEIGHTS.limit +
     balanceScore * WEIGHTS.balance +
     dateScore * WEIGHTS.openedDate
   );
 }
 
-/** Builds the canonical (merged) record for a cluster, preferring the most recently reported values. */
+const STATUS_SEVERITY: Record<string, number> = {
+  current: 0,
+  unknown: 1,
+  arrears: 2,
+  default: 3,
+  written_off: 4,
+  judgement: 5,
+};
+
+/**
+ * Canonical (merged) record for totals. Display fields come from the
+ * highest-priority bureau; numeric fields and status take the most
+ * conservative value so the unified view never understates exposure.
+ */
 function buildCanonical(members: NormalizedBureauAccount[]): NormalizedBureauAccount {
-  // Prefer TransUnion > Experian > XDS as tie-break for display fields when
-  // values differ trivially (e.g. "ABSA" vs "ABSA Bank") — arbitrary but
-  // stable, and documented so product/compliance can override deliberately.
-  const priority: Record<string, number> = { transunion: 0, experian: 1, xds: 2 };
-  const sorted = [...members].sort((a, b) => priority[a.bureau] - priority[b.bureau]);
-  const primary = sorted[0]!;
+  const primary = members[0]!;
+  const worst = [...members].sort((a, b) => (STATUS_SEVERITY[b.status] ?? 0) - (STATUS_SEVERITY[a.status] ?? 0))[0]!;
+  const limits = members.map((m) => m.creditLimit).filter((l): l is number => l !== null);
 
   return {
     ...primary,
-    // Numeric fields: take the most conservative (highest risk) figure
-    // across bureaus rather than averaging, so the unified profile never
-    // understates a consumer's exposure or arrears.
+    status: worst.status,
     currentBalance: Math.max(...members.map((m) => m.currentBalance)),
     overdueAmount: Math.max(...members.map((m) => m.overdueAmount)),
+    instalmentAmount: Math.max(...members.map((m) => m.instalmentAmount)),
     monthsInArrears: Math.max(...members.map((m) => m.monthsInArrears)),
-    creditLimit: members.some((m) => m.creditLimit !== null)
-      ? Math.max(...members.filter((m) => m.creditLimit !== null).map((m) => m.creditLimit!))
-      : null,
+    creditLimit: limits.length > 0 ? Math.max(...limits) : null,
+    closedDate: members.every((m) => m.closedDate !== null) ? primary.closedDate : null,
   };
 }
 
+function clusterId(members: NormalizedBureauAccount[]): string {
+  const key = members
+    .map((m) => `${m.bureau}:${m.accountReference}`)
+    .sort()
+    .join('|');
+  const h = createHash('sha256').update(key).digest('hex');
+  // Format as a UUID (v4 layout bits) so it fits the uuid column.
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-${((parseInt(h[16]!, 16) & 0x3) | 0x8).toString(16)}${h.slice(17, 20)}-${h.slice(20, 32)}`;
+}
+
+function sortKey(a: NormalizedBureauAccount): string {
+  return `${BUREAU_PRIORITY[a.bureau] ?? 9}|${a.accountReference}`;
+}
+
 export function resolveEntities(accountsByBureau: NormalizedBureauAccount[][]): ResolvedAccountCluster[] {
-  const tagged: TaggedAccount[] = accountsByBureau.flatMap((accounts, bureauIndex) =>
-    accounts.map((account) => ({ account, bureauIndex }))
-  );
+  const accounts = accountsByBureau.flat().sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
+  const clusters: NormalizedBureauAccount[][] = [];
 
-  const clusters: TaggedAccount[][] = [];
-
-  for (const candidate of tagged) {
-    let bestCluster: TaggedAccount[] | null = null;
+  for (const candidate of accounts) {
+    let bestCluster: NormalizedBureauAccount[] | null = null;
     let bestScore = 0;
 
     for (const cluster of clusters) {
-      const alreadyHasBureau = cluster.some((m) => m.bureauIndex === candidate.bureauIndex);
-      if (alreadyHasBureau) continue;
-
-      // Score against the cluster's best-matching existing member.
-      const scoreAgainstCluster = Math.max(...cluster.map((m) => pairScore(m.account, candidate.account)));
-      if (scoreAgainstCluster > bestScore) {
-        bestScore = scoreAgainstCluster;
+      if (cluster.some((m) => m.bureau === candidate.bureau)) continue;
+      const score = Math.max(...cluster.map((m) => pairScore(m, candidate)));
+      if (score > bestScore) {
+        bestScore = score;
         bestCluster = cluster;
       }
     }
 
-    if (bestCluster && bestScore >= MERGE_THRESHOLD) {
-      bestCluster.push(candidate);
-    } else {
-      clusters.push([candidate]);
-    }
+    if (bestCluster && bestScore >= MERGE_THRESHOLD) bestCluster.push(candidate);
+    else clusters.push([candidate]);
   }
 
-  return clusters.map((cluster): ResolvedAccountCluster => {
-    const members = cluster.map((c) => c.account);
+  return clusters.map((members): ResolvedAccountCluster => {
     const canonical = buildCanonical(members);
-
-    // Confidence per member = its similarity to the canonical record;
-    // singleton clusters (unmatched, single-bureau accounts) get 1.0 since
-    // there's nothing to disambiguate.
     return {
-      resolvedAccountId: randomUUID(),
-      members: cluster.map((c) => ({
-        bureau: c.account.bureau,
-        accountReference: c.account.accountReference,
-        confidence: members.length === 1 ? 1 : Number(pairScore(c.account, canonical).toFixed(3)),
+      resolvedAccountId: clusterId(members),
+      members: members.map((account) => ({
+        account,
+        confidence: members.length === 1 ? 1 : Number(pairScore(account, canonical).toFixed(3)),
       })),
       canonical,
     };

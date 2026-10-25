@@ -41,6 +41,7 @@ function mapAccount(bureau: 'experian', acc: ExperianRawAccount): NormalizedBure
     creditorName: acc.creditor,
     accountType: acc.product_type,
     status: mapBureauStatus(bureau, acc.status_code),
+    rawStatus: acc.status_code,
     openedDate: acc.opened,
     closedDate: acc.closed,
     creditLimit: acc.limit,
@@ -75,7 +76,7 @@ export class ExperianAdapter implements BureauAdapter {
           'X-Api-Key': this.apiKey,
         },
         body: JSON.stringify({
-          id_hash: request.saIdHash,
+          id_number: request.saIdNumber,
           given_name: request.firstName,
           surname: request.lastName,
         }),

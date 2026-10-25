@@ -1,4 +1,7 @@
+import pino from 'pino';
 import type { AccountStatus } from '../types';
+
+const logger = pino({ name: 'bureau-ingestion:status-mapping' });
 
 /**
  * Every bureau reports account status using its own vocabulary. This maps
@@ -7,41 +10,52 @@ import type { AccountStatus } from '../types';
  * design-system/tokens.ts.
  *
  * NOTE: the raw string keys below are placeholders for the field values
- * documented in each bureau's real API contract (obtained under NDA once
- * the bureau integration agreement is signed) — swap them in per bureau
- * without touching any downstream code, since everything past this
- * function only ever sees AccountStatus.
+ * documented in each bureau's API contract (obtained under NDA once the
+ * bureau integration agreement is signed). Swap them in per bureau; every
+ * downstream consumer only sees AccountStatus.
+ */
+const STATUS_TABLE: Record<string, AccountStatus> = {
+  // In good standing (open, or closed/settled with nothing owing)
+  current: 'current',
+  up_to_date: 'current',
+  'up to date': 'current',
+  performing: 'current',
+  paid_up: 'current',
+  'paid up': 'current',
+  settled: 'current',
+  closed: 'current',
+  closed_paid: 'current',
+
+  arrears: 'arrears',
+  'past due': 'arrears',
+  delinquent: 'arrears',
+
+  default: 'default',
+  'in default': 'default',
+  charged_off: 'default',
+
+  judgement: 'judgement',
+  judgment: 'judgement',
+  'legal action': 'judgement',
+
+  written_off: 'written_off',
+  'written off': 'written_off',
+  closed_bad_debt: 'written_off',
+};
+
+/**
+ * Unmapped statuses become 'unknown' rather than a guess. Guessing
+ * 'current' would understate risk; guessing 'arrears' would show a consumer
+ * an adverse listing that may not exist. 'unknown' is shown neutrally,
+ * excluded from adverse counts, and logged so the mapping can be extended.
  */
 export function mapBureauStatus(bureau: string, rawStatus: string): AccountStatus {
   const normalized = rawStatus.trim().toLowerCase();
-
-  const table: Record<string, AccountStatus> = {
-    // Common / generic
-    current: 'current',
-    up_to_date: 'current',
-    performing: 'current',
-    arrears: 'arrears',
-    'past due': 'arrears',
-    delinquent: 'arrears',
-    default: 'default',
-    'in default': 'default',
-    charged_off: 'default',
-    judgement: 'judgement',
-    judgment: 'judgement',
-    'legal action': 'judgement',
-    written_off: 'written_off',
-    'written off': 'written_off',
-    closed_bad_debt: 'written_off',
-  };
-
-  const mapped = table[normalized];
+  const mapped = STATUS_TABLE[normalized];
   if (mapped) return mapped;
 
-  // Fail safe: an unmapped upstream status must never silently become
-  // 'current' (that would understate risk). Default to the most
-  // conservative interpretation and let downstream monitoring flag it.
-  console.warn(`[bureau-ingestion] unmapped status "${rawStatus}" from ${bureau}; defaulting to 'arrears'`);
-  return 'arrears';
+  logger.warn({ bureau, rawStatus: normalized.slice(0, 40) }, 'unmapped bureau account status; recording as unknown');
+  return 'unknown';
 }
 
 export function clampScore(score: number | null | undefined): number | null {

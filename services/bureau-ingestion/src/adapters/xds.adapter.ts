@@ -41,6 +41,7 @@ function mapFacility(bureau: 'xds', f: XdsRawFacility): NormalizedBureauAccount 
     creditorName: f.lender,
     accountType: f.facility_type,
     status: mapBureauStatus(bureau, f.current_status),
+    rawStatus: f.current_status,
     openedDate: f.start_date,
     closedDate: f.end_date,
     creditLimit: f.approved_limit,
@@ -75,7 +76,7 @@ export class XdsAdapter implements BureauAdapter {
           'X-XDS-Api-Key': this.apiKey,
         },
         body: JSON.stringify({
-          national_id_hash: request.saIdHash,
+          national_id: request.saIdNumber,
           first_name: request.firstName,
           last_name: request.lastName,
         }),

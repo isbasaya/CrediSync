@@ -43,6 +43,7 @@ function mapTrade(bureau: 'transunion', trade: TransUnionRawTrade): NormalizedBu
     creditorName: trade.subscriber_name,
     accountType: trade.account_category,
     status: mapBureauStatus(bureau, trade.account_status),
+    rawStatus: trade.account_status,
     openedDate: trade.date_opened,
     closedDate: trade.date_closed,
     creditLimit: trade.credit_limit,
@@ -77,7 +78,7 @@ export class TransUnionAdapter implements BureauAdapter {
           Authorization: `Bearer ${this.apiKey}`,
         },
         body: JSON.stringify({
-          sa_id_hash: request.saIdHash,
+          id_number: request.saIdNumber,
           first_name: request.firstName,
           last_name: request.lastName,
         }),

@@ -72,6 +72,38 @@ export function creditorNameSimilarity(a: string, b: string): number {
   return Math.max(0, 1 - distance / maxLen);
 }
 
+/**
+ * Bureaus label products differently ("CC", "Credit Card", "Revolving").
+ * Each label is mapped to a product family; matching families score 1,
+ * clearly different families 0, and an unrecognised label 0.6 (neutral —
+ * not enough to block a merge on its own).
+ */
+const PRODUCT_FAMILIES: Array<[family: string, pattern: RegExp]> = [
+  ['home_loan', /\b(home\s*loan|bond|mortgage)\b/],
+  ['vehicle', /\b(vehicle|auto|car|asset\s*finance|instalment\s*sale)\b/],
+  ['credit_card', /\b(credit\s*card|cc|revolving|card)\b/],
+  ['overdraft', /\b(overdraft|od)\b/],
+  ['retail', /\b(retail|clothing|store|furniture|open\s*account)\b/],
+  ['telecom', /\b(cell(ular)?|telecom|mobile|contract)\b/],
+  ['student', /\b(student|study|education)\b/],
+  ['personal_loan', /\b(personal|unsecured|cash\s*loan|term\s*loan|micro\s*loan|loan)\b/],
+];
+
+export function productFamily(accountType: string): string | null {
+  const label = accountType.toLowerCase().replace(/[_-]+/g, ' ');
+  for (const [family, pattern] of PRODUCT_FAMILIES) {
+    if (pattern.test(label)) return family;
+  }
+  return null;
+}
+
+export function accountTypeSimilarity(a: string, b: string): number {
+  const fa = productFamily(a);
+  const fb = productFamily(b);
+  if (fa === null || fb === null) return 0.6;
+  return fa === fb ? 1 : 0;
+}
+
 /** Closeness of two monetary amounts in [0, 1], tolerant of small bureau-to-bureau rounding drift. */
 export function amountCloseness(a: number, b: number): number {
   if (a === 0 && b === 0) return 1;

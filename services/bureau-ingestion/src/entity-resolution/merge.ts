@@ -1,74 +1,62 @@
-import { resolveEntities } from './resolver';
+import { ADVERSE_ACCOUNT_STATUSES } from '@credisync/types';
+import { ENTITY_RESOLUTION_VERSION, resolveEntities } from './resolver';
+import { DEFAULT_SCORE_RANGES, normaliseScore, type ScoreRanges } from './score-normalisation';
 import { getScoreBand } from '../types';
-import type { NormalizedBureauReport, ResolvedAccountCluster, UnifiedCreditProfile } from '../types';
-
-const ADVERSE_STATUSES = new Set(['arrears', 'default', 'judgement', 'written_off']);
+import type { BureauSource, NormalizedBureauReport, UnifiedCreditProfile } from '../types';
 
 /**
- * Unified score = simple average of every bureau score that was actually
- * returned (thin-file bureaus with no score are excluded, not treated as
- * zero). This is intentionally the simplest defensible aggregation for
- * v1 — a bureau-reliability-weighted or ML-based aggregator can replace
- * this function without changing its signature, versioned via
- * entity_resolution_ver.
+ * Unified score = mean of the bureau scores that were returned, each first
+ * mapped onto the common 0–999 scale (see score-normalisation.ts). Bureaus
+ * with no score (thin file) are excluded rather than treated as zero.
+ * Per-bureau scores are stored as reported; their bands use the same
+ * normalised value so the colour shown matches the unified scale.
  */
-function computeUnifiedScore(reports: NormalizedBureauReport[]): number | null {
-  const scores = reports.map((r) => r.score).filter((s): s is number => s !== null);
+function computeUnifiedScore(reports: NormalizedBureauReport[], ranges: ScoreRanges): number | null {
+  const scores = reports
+    .filter((r): r is NormalizedBureauReport & { score: number } => r.score !== null)
+    .map((r) => normaliseScore(r.bureau, r.score, ranges));
   if (scores.length === 0) return null;
-  const avg = scores.reduce((sum, s) => sum + s, 0) / scores.length;
-  return Math.round(avg);
-}
-
-function scoreFor(reports: NormalizedBureauReport[], bureau: string): number | null {
-  return reports.find((r) => r.bureau === bureau)?.score ?? null;
+  return Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length);
 }
 
 export function buildUnifiedProfile(
   reports: NormalizedBureauReport[],
-  entityResolutionVersion = 1
+  ranges: ScoreRanges = DEFAULT_SCORE_RANGES
 ): UnifiedCreditProfile {
-  const resolvedClusters: ResolvedAccountCluster[] = resolveEntities(reports.map((r) => r.accounts));
+  const resolvedClusters = resolveEntities(reports.map((r) => r.accounts));
+  const canonical = resolvedClusters.map((c) => c.canonical);
 
-  const openAccounts = resolvedClusters.filter((c) => c.canonical.closedDate === null).length;
-  const adverseAccounts = resolvedClusters.filter((c) => ADVERSE_STATUSES.has(c.canonical.status)).length;
-  const totalCreditExposure = resolvedClusters.reduce((sum, c) => sum + c.canonical.currentBalance, 0);
-  const monthlyInstalment = resolvedClusters.reduce((sum, c) => sum + c.canonical.instalmentAmount, 0);
+  const scoreFor = (bureau: BureauSource) => reports.find((r) => r.bureau === bureau)?.score ?? null;
+  const bandFor = (bureau: BureauSource) => {
+    const s = scoreFor(bureau);
+    return s === null ? null : getScoreBand(normaliseScore(bureau, s, ranges));
+  };
 
-  // Judgements/defaults/enquiries come straight from each bureau's own
-  // aggregate counts (not derivable from merged accounts, since a single
-  // judgement can span records the resolver didn't cluster together).
-  // Take the max across bureaus — the most conservative reading — since
-  // under-reporting risk to the consumer is the worse failure mode.
-  const judgementsCount = Math.max(0, ...reports.map((r) => r.judgementsCount));
-  const defaultsCount = Math.max(0, ...reports.map((r) => r.defaultsCount));
-  const enquiriesLast12m = Math.max(0, ...reports.map((r) => r.enquiriesLast12m));
-
-  const unifiedScore = computeUnifiedScore(reports);
-
-  const tuScore = scoreFor(reports, 'transunion');
-  const exScore = scoreFor(reports, 'experian');
-  const xdsScore = scoreFor(reports, 'xds');
+  const unifiedScore = computeUnifiedScore(reports, ranges);
 
   return {
     unifiedScore,
     unifiedScoreBand: unifiedScore !== null ? getScoreBand(unifiedScore) : null,
-    entityResolutionVersion,
+    entityResolutionVersion: ENTITY_RESOLUTION_VERSION,
 
-    transunionScore: tuScore,
-    transunionScoreBand: tuScore !== null ? getScoreBand(tuScore) : null,
-    experianScore: exScore,
-    experianScoreBand: exScore !== null ? getScoreBand(exScore) : null,
-    xdsScore,
-    xdsScoreBand: xdsScore !== null ? getScoreBand(xdsScore) : null,
+    transunionScore: scoreFor('transunion'),
+    transunionScoreBand: bandFor('transunion'),
+    experianScore: scoreFor('experian'),
+    experianScoreBand: bandFor('experian'),
+    xdsScore: scoreFor('xds'),
+    xdsScoreBand: bandFor('xds'),
 
-    totalAccounts: resolvedClusters.length,
-    openAccounts,
-    adverseAccounts,
-    judgementsCount,
-    defaultsCount,
-    enquiriesLast12m,
-    totalCreditExposure: Number(totalCreditExposure.toFixed(2)),
-    monthlyInstalment: Number(monthlyInstalment.toFixed(2)),
+    totalAccounts: canonical.length,
+    openAccounts: canonical.filter((a) => a.closedDate === null).length,
+    adverseAccounts: canonical.filter((a) => ADVERSE_ACCOUNT_STATUSES.has(a.status)).length,
+    // Bureau aggregates can't be derived from merged accounts (one judgement
+    // may span records the resolver kept apart). Take the max across bureaus:
+    // the most conservative reading.
+    judgementsCount: Math.max(0, ...reports.map((r) => r.judgementsCount)),
+    defaultsCount: Math.max(0, ...reports.map((r) => r.defaultsCount)),
+    enquiriesLast12m: Math.max(0, ...reports.map((r) => r.enquiriesLast12m)),
+    totalCreditExposure: Number(canonical.reduce((sum, a) => sum + a.currentBalance, 0).toFixed(2)),
+    monthlyInstalment: Number(canonical.reduce((sum, a) => sum + a.instalmentAmount, 0).toFixed(2)),
 
     resolvedClusters,
   };
