@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { AppHeader } from '@/components/AppHeader';
 import { Notice, PageShell } from '@/components/ui';
-import { describeError, listDisputes } from '@/lib/api-client';
+import { describeError, disputeLetterUrl, listDisputes } from '@/lib/api-client';
 import { RequireSession } from '@/lib/session';
 import {
   BUREAU_LABELS,
@@ -86,6 +86,14 @@ function DisputeList() {
                 <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${statusTone(d)}`}>
                   {DISPUTE_STATUS_LABELS[d.status]}
                 </span>
+                {d.letterContent !== null && (
+                  <a
+                    href={disputeLetterUrl(d.id)}
+                    className="text-xs font-semibold text-teal-700 hover:text-teal-800"
+                  >
+                    Download letter (PDF)
+                  </a>
+                )}
                 {d.resolutionDeadline && !d.status.startsWith('resolved') && (
                   <span className="text-xs text-text-muted">
                     Response due {date(d.resolutionDeadline)}

@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { AdminLayout } from '@/components/AdminLayout';
 import { RequireAuth } from '@/components/RequireAuth';
 import { Badge, Card, EmptyState, PageHeader, Pagination, Table } from '@/components/ui';
-import { api, ApiError } from '@/lib/api-client';
+import { api, ApiError, API_BASE_URL } from '@/lib/api-client';
 import { GavelIcon } from '@/components/icons';
 
 interface Dispute {
@@ -159,6 +159,15 @@ function DisputeUpdatePanel({
           </button>
         </form>
       </div>
+      <p className="mt-4 text-sm text-text-secondary">
+        <a
+          href={`${API_BASE_URL}/admin/disputes/${dispute.id}/lodging-letter.pdf`}
+          className="font-semibold text-teal-700 hover:text-teal-800"
+        >
+          Download lodging letter (PDF)
+        </a>{' '}
+        — contains the consumer’s full ID number. Downloads are logged against your account.
+      </p>
       {error && <p className="mt-4 text-sm font-medium text-status-very-poor-fg">{error}</p>}
       <button
         type="button"

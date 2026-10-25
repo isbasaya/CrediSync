@@ -119,6 +119,35 @@ describe.skipIf(!testDatabaseAvailable)('dispute engine (real Postgres)', () => 
     expect(again.status).toBe(409);
   });
 
+  it('serves PDF letters: the owner gets their copy, staff get an audited lodging copy', async () => {
+    const mine = await request(app)
+      .get(`/disputes/${disputeId}/letter.pdf`)
+      .set(as(ALICE))
+      .buffer(true);
+    expect(mine.status).toBe(200);
+    expect(mine.headers['content-type']).toBe('application/pdf');
+    expect(Buffer.from(mine.body).subarray(0, 5).toString()).toBe('%PDF-');
+
+    expect(
+      (await request(app).get(`/disputes/${disputeId}/letter.pdf`).set(as(MALLORY))).status,
+    ).toBe(404);
+    expect(
+      (await request(app).get(`/admin/disputes/${disputeId}/lodging-letter.pdf`).set(as(ALICE)))
+        .status,
+    ).toBe(403);
+
+    const lodging = await request(app)
+      .get(`/admin/disputes/${disputeId}/lodging-letter.pdf`)
+      .set(as(ADMIN, 'admin'))
+      .buffer(true);
+    expect(lodging.status).toBe(200);
+    const audit = await db.adminPool.query(
+      "SELECT count(*)::int AS n FROM credisync.regulatory_audit_logs WHERE performed_by = $1 AND payload->>'action' = 'download_lodging_letter'",
+      [ADMIN],
+    );
+    expect(audit.rows[0].n).toBe(1);
+  });
+
   it('does not let the consumer escalate before the bureau deadline has passed', async () => {
     const res = await request(app)
       .post(`/disputes/${disputeId}/escalate`)

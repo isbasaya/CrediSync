@@ -12,7 +12,11 @@ import type {
  * set by the gateway, so this code never sees or stores a token. A 401
  * triggers one silent refresh (rotating the refresh cookie) and a retry.
  */
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:4000/api';
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:4000/api';
+
+/** Direct link (cookie-authenticated) to download a dispute letter as PDF. */
+export const disputeLetterUrl = (id: string) =>
+  `${API_BASE_URL}/disputes/${encodeURIComponent(id)}/letter.pdf`;
 
 export class ApiError extends Error {
   constructor(

@@ -154,6 +154,20 @@ export function createApp(pool: Pool) {
     ),
   );
 
+  app.get(
+    '/disputes/:id/letter.pdf',
+    asyncHandler(async (req, res) => {
+      const pdf = await service.consumerLetterPdf(pool, req.actingUserId!, param(req));
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="credisync-dispute-${param(req).slice(0, 8)}.pdf"`,
+      );
+      res.setHeader('Cache-Control', 'no-store');
+      return res.send(pdf);
+    }),
+  );
+
   app.post(
     '/disputes',
     asyncHandler(async (req, res) => {
@@ -200,6 +214,21 @@ export function createApp(pool: Pool) {
   );
 
   // --- Operations routes: admin / compliance officers only ----------------
+
+  app.get(
+    '/admin/disputes/:id/lodging-letter.pdf',
+    requireOpsRole,
+    asyncHandler(async (req, res) => {
+      const pdf = await service.lodgingLetterPdf(pool, req.actingUserId!, param(req));
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="lodging-${param(req).slice(0, 8)}.pdf"`,
+      );
+      res.setHeader('Cache-Control', 'no-store');
+      return res.send(pdf);
+    }),
+  );
 
   app.post(
     '/admin/disputes/:id/bureau-reference',

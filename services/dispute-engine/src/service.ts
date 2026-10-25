@@ -5,6 +5,7 @@ import { decryptFromBytes } from '@credisync/crypto';
 import { maskSaIdNumber, type DisputeReason, type DisputeStatus } from '@credisync/types';
 import { sendEmail } from '@credisync/notifications';
 import { generateDisputeLetter } from './templates/dispute-letter.template';
+import { renderLetterPdf } from './templates/letter-pdf';
 import { assertLegalReviewComplete } from './templates/legal-references';
 import { computeResolutionDeadline, southAfricanDate } from './deadlines';
 import { InvalidTransitionError, isEditable, statusesLeadingTo } from './state-machine';
@@ -99,7 +100,8 @@ async function loadHolidayOverrides(client: PoolClient): Promise<Set<string>> {
   return new Set(r.rows.map((row) => row.d));
 }
 
-async function consumerContext(client: PoolClient, userId: string) {
+/** `revealFullId` is only for the audited operations lodging copy. */
+async function consumerContext(client: PoolClient, userId: string, revealFullId = false) {
   const r = await client.query(
     'SELECT first_name, last_name, mobile_number, email, sa_id_encrypted FROM credisync.users WHERE id = $1',
     [userId],
@@ -109,7 +111,7 @@ async function consumerContext(client: PoolClient, userId: string) {
   const saId = await decryptFromBytes(u.sa_id_encrypted);
   return {
     fullName: `${u.first_name} ${u.last_name}`,
-    saIdMasked: maskSaIdNumber(saId),
+    saIdMasked: revealFullId ? saId : maskSaIdNumber(saId),
     mobileNumber: u.mobile_number as string,
     email: u.email as string,
   };
@@ -619,4 +621,57 @@ async function notifySafely(
   } catch (err) {
     logger.error({ err }, 'failed to send dispute notification');
   }
+}
+
+// ---------------------------------------------------------------------------
+// PDF letters
+// ---------------------------------------------------------------------------
+
+/** The consumer's copy: the stored letter (masked ID) as a PDF. */
+export async function consumerLetterPdf(pool: Pool, userId: string, id: string): Promise<Buffer> {
+  const dispute = await getDispute(pool, userId, id);
+  if (!dispute.letterContent)
+    throw new DisputeError(404, 'no_letter', 'This dispute has no letter yet');
+  return renderLetterPdf(dispute.letterContent, { disputeId: id });
+}
+
+/**
+ * The operations team's lodging copy for the manual submission channel:
+ * regenerated with the consumer's FULL ID number, because the bureau needs
+ * it to locate the record. Staff only, marked confidential, and every
+ * download is written to the audit log against the staff member.
+ */
+export async function lodgingLetterPdf(pool: Pool, actorId: string, id: string): Promise<Buffer> {
+  assertLegalReviewComplete();
+  const letter = await withSystem(pool, async (client) => {
+    const r = await client.query(`${SELECT_DISPUTE} WHERE d.id = $1`, [id]);
+    const d = r.rows[0];
+    if (!d) throw notFound();
+    if (!['submitted', 'under_review'].includes(d.status)) {
+      throw new DisputeError(
+        409,
+        'not_submitted',
+        'Only submitted disputes are lodged with the bureau',
+      );
+    }
+    const account = await accountContext(client, d.bureau_account_id);
+    const consumer = await consumerContext(client, d.user_id, true);
+    await writeAudit(client, {
+      userId: d.user_id,
+      performedBy: actorId,
+      eventType: 'admin_access',
+      resourceType: 'dispute',
+      resourceId: id,
+      payload: { action: 'download_lodging_letter' },
+    });
+    return generateDisputeLetter({
+      consumer,
+      account: account!,
+      bureau: d.bureau,
+      reason: d.dispute_reason,
+      description: d.dispute_description,
+      hasEvidence: (d.supporting_evidence as string[]).length > 0,
+    });
+  });
+  return renderLetterPdf(letter, { disputeId: id, confidential: true });
 }

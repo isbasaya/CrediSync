@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { withSystem, writeAudit } from '@credisync/db';
 import { asyncHandler, requireAuth, requireRole } from '@credisync/middleware';
 import { AUDIT_EVENT_TYPES, DISPUTE_STATUSES } from '@credisync/types';
-import { forward } from './proxy';
+import { forward, forwardBinary } from './proxy';
 import type { GatewayConfig } from './app';
 
 /**
@@ -198,6 +198,17 @@ export function createAdminRouter(pool: Pool, config: GatewayConfig): Router {
     z.string().uuid().safeParse(req.params.id).success
       ? req.params.id
       : '00000000-0000-4000-8000-000000000000';
+  router.get(
+    '/disputes/:id/lodging-letter.pdf',
+    asyncHandler((req, res) =>
+      forwardBinary(
+        disputeEngineUrl,
+        `/admin/disputes/${disputeId(req)}/lodging-letter.pdf`,
+        req,
+        res,
+      ),
+    ),
+  );
   router.post(
     '/disputes/:id/bureau-reference',
     asyncHandler((req, res) =>

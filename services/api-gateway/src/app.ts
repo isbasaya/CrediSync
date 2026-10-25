@@ -11,7 +11,7 @@ import {
   standardRateLimiter,
   traceIdMiddleware,
 } from '@credisync/middleware';
-import { callService, forward, UpstreamError } from './proxy';
+import { callService, forward, forwardBinary, UpstreamError } from './proxy';
 import { clearSession, deliverSession, originCheck, refreshTokenFrom } from './session';
 import { createAdminRouter } from './admin-router';
 import { ReadinessError, scoreBankReadiness } from './bank-readiness';
@@ -233,6 +233,12 @@ export function createApp(pool: Pool, config: GatewayConfig = loadConfig()) {
   app.get(
     '/api/disputes/:id',
     asyncHandler((req, res) => forward(config.disputeEngineUrl, `/disputes/${id(req)}`, req, res)),
+  );
+  app.get(
+    '/api/disputes/:id/letter.pdf',
+    asyncHandler((req, res) =>
+      forwardBinary(config.disputeEngineUrl, `/disputes/${id(req)}/letter.pdf`, req, res),
+    ),
   );
   for (const action of ['regenerate-letter', 'submit', 'escalate']) {
     app.post(

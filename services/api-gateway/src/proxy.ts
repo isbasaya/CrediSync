@@ -103,3 +103,39 @@ export async function forward(
   }
   res.status(result.status).json(result.data);
 }
+
+/** Forwards a binary response (e.g. a PDF) unchanged, with download headers. */
+export async function forwardBinary(
+  baseUrl: string,
+  path: string,
+  req: Request,
+  res: Response,
+): Promise<void> {
+  let response: globalThis.Response;
+  try {
+    response = await fetch(`${baseUrl}${path}`, {
+      method: 'GET',
+      headers: {
+        ...internalHeaders(
+          req.user ? { id: req.user.id, role: req.user.role } : undefined,
+          req.traceId,
+        ),
+      },
+      signal: AbortSignal.timeout(20_000),
+    });
+  } catch {
+    throw new UpstreamError(502, 'upstream_unavailable');
+  }
+  if (!response.ok) {
+    res
+      .status(response.status)
+      .type('application/json')
+      .send(await response.text());
+    return;
+  }
+  for (const h of ['content-type', 'content-disposition', 'cache-control']) {
+    const v = response.headers.get(h);
+    if (v) res.setHeader(h, v);
+  }
+  res.status(200).send(Buffer.from(await response.arrayBuffer()));
+}

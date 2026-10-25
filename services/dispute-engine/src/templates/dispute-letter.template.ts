@@ -122,15 +122,12 @@ Ground of dispute:
 Consumer's statement:
 ${sanitiseStatement(description)}
 
-In terms of ${CITATIONS.challengeRight}, and my right to correction of personal information under
-${CITATIONS.popiaCorrection}, I request that you:
-  1. Take reasonable steps to investigate the accuracy of the disputed information and respond within
-     ${CITATIONS.responsePeriod} of receipt of this dispute;
+In terms of ${CITATIONS.challengeRight}, and my right to correction of personal information under ${CITATIONS.popiaCorrection}, I request that you:
+  1. Take reasonable steps to investigate the accuracy of the disputed information and respond within ${CITATIONS.responsePeriod} of receipt of this dispute;
   2. Correct or remove any information found to be inaccurate, incomplete, out of date or unverifiable;
   3. Notify me in writing of the outcome of your investigation and of any amendment to my credit record.
 
-If this dispute is not resolved to my satisfaction within that period, I reserve the right to refer the
-matter to ${CITATIONS.escalation}.
+If this dispute is not resolved to my satisfaction within that period, I reserve the right to refer the matter to ${CITATIONS.escalation}.
 ${input.hasEvidence ? '\nSupporting evidence is attached.\n' : ''}
 Yours faithfully,
 

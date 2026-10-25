@@ -176,6 +176,14 @@ describe.skipIf(!testDatabaseAvailable)('consumer and admin journey through the 
       .set('Origin', ORIGIN);
     expect(submit.status).toBe(200);
     expect(submit.body.status).toBe('submitted');
+
+    const pdf = await api()
+      .get(`/api/disputes/${create.body.id}/letter.pdf`)
+      .set('Cookie', cookies)
+      .buffer(true);
+    expect(pdf.status).toBe(200);
+    expect(pdf.headers['content-type']).toBe('application/pdf');
+    expect(Buffer.from(pdf.body).subarray(0, 5).toString()).toBe('%PDF-');
   });
 
   it("a second user cannot touch the first user's data", async () => {
