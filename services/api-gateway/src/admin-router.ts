@@ -5,13 +5,15 @@ import { withSystem, writeAudit } from '@credisync/db';
 import { asyncHandler, requireAuth, requireRole } from '@credisync/middleware';
 import { AUDIT_EVENT_TYPES, DISPUTE_STATUSES } from '@credisync/types';
 import { forward } from './proxy';
+import type { GatewayConfig } from './app';
 
 /**
  * Internal staff portal API. Every route requires an admin or compliance
  * officer, runs in explicit system context, and writes an `admin_access`
  * audit event naming who looked at what (POPIA s23 access log).
  */
-export function createAdminRouter(pool: Pool, disputeEngineUrl: string): Router {
+export function createAdminRouter(pool: Pool, config: GatewayConfig): Router {
+  const disputeEngineUrl = config.disputeEngineUrl;
   const router = Router();
   router.use(requireAuth, requireRole('admin', 'compliance_officer'));
 
@@ -36,9 +38,31 @@ export function createAdminRouter(pool: Pool, disputeEngineUrl: string): Router 
       return result;
     });
 
+  async function serviceHealth(): Promise<Record<string, string>> {
+    const targets: Record<string, string> = {
+      auth: config.authUrl,
+      bureau_ingestion: config.bureauIngestionUrl,
+      dispute_engine: config.disputeEngineUrl,
+      open_banking: config.openBankingUrl,
+      bank_readiness: config.bankReadinessUrl,
+    };
+    const entries = await Promise.all(
+      Object.entries(targets).map(async ([name, url]) => {
+        try {
+          const r = await fetch(`${url}/healthz`, { signal: AbortSignal.timeout(2000) });
+          return [name, r.ok ? 'ok' : 'degraded'] as const;
+        } catch {
+          return [name, 'unreachable'] as const;
+        }
+      })
+    );
+    return { api_gateway: 'ok', ...Object.fromEntries(entries) };
+  }
+
   router.get(
     '/dashboard',
     asyncHandler(async (req, res) => {
+      const health = serviceHealth();
       const data = await audited(req, 'dashboard', async (client) => {
         const [users, disputes, profiles] = await Promise.all([
           client.query(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE is_active) AS active FROM credisync.users WHERE role = 'consumer'`),
@@ -59,7 +83,7 @@ export function createAdminRouter(pool: Pool, disputeEngineUrl: string): Router 
           averageScore: Math.round(Number(profiles.rows[0]?.avg ?? 0)),
         };
       });
-      res.json(data);
+      res.json({ ...data, serviceHealth: await health });
     })
   );
 

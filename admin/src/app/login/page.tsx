@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/lib/auth';
+import { NotStaffError, useAuth } from '@/lib/auth';
 import { ApiError } from '@/lib/api-client';
 import { AlertTriangleIcon, LockIcon, LogoMark, MailIcon } from '@/components/icons';
 
@@ -23,10 +23,18 @@ export default function LoginPage() {
       await login(email, password);
       router.push('/');
     } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.status === 401 ? 'Invalid email or password' : 'Something went wrong');
+      if (err instanceof NotStaffError) {
+        setError(err.message);
+      } else if (err instanceof ApiError) {
+        setError(
+          err.status === 401
+            ? 'Invalid email or password, or the account is temporarily locked.'
+            : err.status === 429
+              ? 'Too many attempts. Wait a minute and try again.'
+              : 'We couldn’t sign you in. Try again shortly.'
+        );
       } else {
-        setError('Network error');
+        setError('We can’t reach CrediSync. Check your connection.');
       }
     } finally {
       setLoading(false);

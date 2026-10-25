@@ -73,28 +73,10 @@ export function createApp(pool: Pool, config: GatewayConfig = loadConfig()) {
     })
   );
 
-  app.get('/api/healthz', async (_req, res) => {
-    const targets = {
-      auth: config.authUrl,
-      bureauIngestion: config.bureauIngestionUrl,
-      disputeEngine: config.disputeEngineUrl,
-      openBanking: config.openBankingUrl,
-      bankReadiness: config.bankReadinessUrl,
-    };
-    const entries = await Promise.all(
-      Object.entries(targets).map(async ([name, url]) => {
-        try {
-          const r = await fetch(`${url}/healthz`, { signal: AbortSignal.timeout(2000) });
-          return [name, r.ok ? 'ok' : 'unhealthy'] as const;
-        } catch {
-          return [name, 'unreachable'] as const;
-        }
-      })
-    );
-    const services = Object.fromEntries(entries);
-    const healthy = entries.every(([, s]) => s === 'ok');
-    res.status(healthy ? 200 : 503).json({ status: healthy ? 'ok' : 'degraded', services });
-  });
+  // Liveness for the load balancer: the gateway itself only. Downstream
+  // health is an admin-only view (GET /api/admin/dashboard), so internal
+  // topology isn't public and one slow service can't take the gateway out.
+  app.get('/api/healthz', (_req, res) => res.status(200).json({ status: 'ok' }));
 
   // Bureau webhooks: signed by the bureau and verified by the dispute engine
   // over the exact raw bytes, so forward the body untouched.
@@ -165,7 +147,7 @@ export function createApp(pool: Pool, config: GatewayConfig = loadConfig()) {
   );
 
   // ---- Everything below requires a signed-in user ------------------------
-  app.use('/api/admin', createAdminRouter(pool, config.disputeEngineUrl));
+  app.use('/api/admin', createAdminRouter(pool, config));
   app.use('/api', requireAuth);
 
   // Account, consent and POPIA rights

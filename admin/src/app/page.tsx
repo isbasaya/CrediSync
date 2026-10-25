@@ -12,6 +12,7 @@ interface DashboardStats {
   activeUsers: number;
   openDisputes: number;
   resolvedDisputes30d: number;
+  overdueDisputes: number;
   totalCreditProfiles: number;
   averageScore: number;
   serviceHealth: Record<string, string>;
@@ -20,6 +21,7 @@ interface DashboardStats {
 const healthTone: Record<string, 'positive' | 'warning' | 'negative'> = {
   ok: 'positive',
   degraded: 'warning',
+  unreachable: 'negative',
 };
 
 export default function DashboardPage() {
@@ -36,6 +38,7 @@ export default function DashboardPage() {
           activeUsers: 0,
           openDisputes: 0,
           resolvedDisputes30d: 0,
+          overdueDisputes: 0,
           totalCreditProfiles: 0,
           averageScore: 0,
           serviceHealth: {},
@@ -83,7 +86,7 @@ export default function DashboardPage() {
                     )}
                     {Object.entries(stats?.serviceHealth ?? {}).map(([name, status]) => (
                       <div key={name} className="flex items-center justify-between py-1">
-                        <span className="text-sm capitalize text-text-secondary">{name}</span>
+                        <span className="text-sm capitalize text-text-secondary">{name.replace(/_/g, ' ')}</span>
                         <span
                           className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
                             (healthTone[status] ?? 'negative') === 'positive'
@@ -103,6 +106,9 @@ export default function DashboardPage() {
                 <Card title="Recent Activity" icon={<InboxIcon className="h-4 w-4 text-text-muted" />}>
                   <div className="space-y-2 text-sm text-text-muted">
                     <p>Resolved disputes (30d): {stats?.resolvedDisputes30d ?? 0}</p>
+                    <p className={stats?.overdueDisputes ? 'font-semibold text-status-fair-fg' : undefined}>
+                      Disputes past the bureau deadline: {stats?.overdueDisputes ?? 0}
+                    </p>
                     <p>Credit profiles: {stats?.totalCreditProfiles ?? 0}</p>
                   </div>
                 </Card>
