@@ -190,6 +190,9 @@ const config: Config = {
       'status-judgement-fg':   semantic.statusJudgementFg,
       'status-written-off-bg': semantic.statusWrittenOffBg,
       'status-written-off-fg': semantic.statusWrittenOffFg,
+      'status-unknown-bg': semantic.statusUnknownBg,
+      'status-unknown-fg': semantic.statusUnknownFg,
+      'status-unknown-border': semantic.statusUnknownBorder,
 
       // Alert
       'alert-success':  semantic.alertSuccess,

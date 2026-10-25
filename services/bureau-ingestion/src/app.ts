@@ -56,7 +56,7 @@ export function createApp(pool: Pool, adapters: BureauAdapter[] = createAdapters
     })
   );
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+   
   app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
     if (err instanceof RefreshRefusedError) {
       if (err.retryAfterSeconds) res.setHeader('Retry-After', String(err.retryAfterSeconds));

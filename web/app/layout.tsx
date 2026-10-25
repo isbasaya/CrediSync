@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
+import { SessionProvider } from '@/lib/session';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' });
@@ -9,6 +10,10 @@ export const metadata: Metadata = {
   description: "South Africa's real-time, multi-bureau credit orchestration platform",
 };
 
+/**
+ * Design-direction notes for the design review tooling. Emitted only
+ * outside production so internal notes never ship to customers.
+ */
 const DIRECTION_CONTRACT = `
 THESIS: Trust reads as native fluency — CrediSync should feel like the banking app 20 million South Africans already use daily, not an imported SaaS template wearing navy as a trust costume.
 OWN-WORLD: Light ivory ground, near-black ink, one confident deep-teal accent; bold rounded numerals replace gauges; type scale and weight carry hierarchy, never card chrome or borders.
@@ -21,10 +26,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en-ZA" className={inter.variable}>
-      <body className="min-h-dvh font-sans antialiased">
-        {/* eslint-disable-next-line react/no-danger -- literal HTML comment carrying the direction contract, must survive to the built markup */}
-        <template dangerouslySetInnerHTML={{ __html: `<!--${DIRECTION_CONTRACT}-->` }} />
-        {children}
+      <body className="min-h-dvh bg-bg-base font-sans antialiased">
+        {process.env.NODE_ENV !== 'production' && <template dangerouslySetInnerHTML={{ __html: `<!--${DIRECTION_CONTRACT}-->` }} />}
+        <SessionProvider>{children}</SessionProvider>
       </body>
     </html>
   );

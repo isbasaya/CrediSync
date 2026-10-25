@@ -51,14 +51,17 @@ function formatDate(date: Date): string {
 
 /** Keeps the consumer's free text from breaking the letter layout or smuggling control characters. */
 function sanitiseStatement(text: string): string {
-  return text
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
-    .replace(/\r\n?/g, '\n')
-    .trim()
-    .slice(0, 4000)
-    .split('\n')
-    .map((line) => `  ${line}`)
-    .join('\n');
+  return (
+    text
+      // eslint-disable-next-line no-control-regex -- intentionally strips control characters from consumer text
+      .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
+      .replace(/\r\n?/g, '\n')
+      .trim()
+      .slice(0, 4000)
+      .split('\n')
+      .map((line) => `  ${line}`)
+      .join('\n')
+  );
 }
 
 export interface DisputeLetterInput {

@@ -32,6 +32,7 @@ abstract class _Primitives {
   // Neutrals / slate
   static const slate600 = Color(0xFF475569);
   static const slate400 = Color(0xFF94A3B8);
+  static const slate300 = Color(0xFFCBD5E1);
   static const slate100 = Color(0xFFF1F5F9);
   static const white    = Color(0xFFFFFFFF);
 
@@ -142,17 +143,44 @@ class ScoreBandTheme {
 // ---------------------------------------------------------------------------
 // Account status tokens (mirrors accountStatusTokens in tokens.ts)
 // ---------------------------------------------------------------------------
-enum AccountStatus { current, arrears, defaulted, judgement, writtenOff }
+enum AccountStatus {
+  current,
+  arrears,
+  defaulted,
+  judgement,
+  writtenOff,
+  unknown;
+
+  /// Maps the API / database value (db/schema.sql account_status) to the enum.
+  static AccountStatus fromApi(String value) {
+    switch (value) {
+      case 'current':
+        return AccountStatus.current;
+      case 'arrears':
+        return AccountStatus.arrears;
+      case 'default':
+        return AccountStatus.defaulted;
+      case 'judgement':
+        return AccountStatus.judgement;
+      case 'written_off':
+        return AccountStatus.writtenOff;
+      default:
+        return AccountStatus.unknown;
+    }
+  }
+}
 
 class AccountStatusTheme {
   final Color background;
   final Color foreground;
   final String label;
+  final Color? border;
 
   const AccountStatusTheme({
     required this.background,
     required this.foreground,
     required this.label,
+    this.border,
   });
 
   static const Map<AccountStatus, AccountStatusTheme> values = {
@@ -180,6 +208,13 @@ class AccountStatusTheme {
       background: _Primitives.slate100,
       foreground: _Primitives.slate600,
       label: 'Written Off',
+    ),
+    // Bureau sent a status we haven't mapped yet: neutral, outlined, never adverse.
+    AccountStatus.unknown: AccountStatusTheme(
+      background: _Primitives.white,
+      foreground: _Primitives.slate600,
+      label: 'Status unknown',
+      border: _Primitives.slate300,
     ),
   };
 }

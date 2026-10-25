@@ -114,7 +114,7 @@ export const semantic = {
   // --- Score band / bureau status tokens ---
   // Maps directly to PostgreSQL enum values (see db/schema.sql)
   //   score_band: 'excellent' | 'good' | 'fair' | 'poor' | 'very_poor'
-  //   account_status: 'current' | 'arrears' | 'default' | 'judgement' | 'written_off'
+  //   account_status: 'current' | 'arrears' | 'default' | 'judgement' | 'written_off' | 'unknown'
 
   statusExcellentBg:   primitives.green100,
   statusExcellentFg:   primitives.green700,
@@ -151,6 +151,11 @@ export const semantic = {
 
   statusWrittenOffBg:  primitives.slate100,
   statusWrittenOffFg:  primitives.slate600,
+
+  // Bureau sent a status we haven't mapped yet: neutral, outlined, never adverse.
+  statusUnknownBg:     primitives.white,
+  statusUnknownFg:     primitives.slate600,
+  statusUnknownBorder: primitives.slate300,
 
   // Alerts / toasts
   alertSuccess:  primitives.green600,
@@ -329,12 +334,13 @@ export const scoreBandTokens: Record<ScoreBand, ScoreBandToken> = {
   },
 };
 
-export type AccountStatus = 'current' | 'arrears' | 'default' | 'judgement' | 'written_off';
+export type AccountStatus = 'current' | 'arrears' | 'default' | 'judgement' | 'written_off' | 'unknown';
 
 export interface AccountStatusToken {
   bg: string;
   fg: string;
   label: string;
+  border?: string;
 }
 
 export const accountStatusTokens: Record<AccountStatus, AccountStatusToken> = {
@@ -343,4 +349,5 @@ export const accountStatusTokens: Record<AccountStatus, AccountStatusToken> = {
   default:    { bg: semantic.statusDefaultBg,    fg: semantic.statusDefaultFg,    label: 'Default'     },
   judgement:  { bg: semantic.statusJudgementBg,  fg: semantic.statusJudgementFg,  label: 'Judgement'   },
   written_off:{ bg: semantic.statusWrittenOffBg, fg: semantic.statusWrittenOffFg, label: 'Written Off' },
+  unknown:    { bg: semantic.statusUnknownBg,    fg: semantic.statusUnknownFg,    label: 'Status unknown', border: semantic.statusUnknownBorder },
 };

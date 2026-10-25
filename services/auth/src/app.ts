@@ -178,7 +178,7 @@ export function createApp(pool: Pool) {
     })
   );
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+   
   app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
     if (err instanceof service.AuthError) {
       return res.status(err.statusCode).json({ error: err.code, message: err.message });

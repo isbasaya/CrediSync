@@ -42,7 +42,7 @@ export function deliverSession(req: Request, res: Response, status: number, body
     res.status(status).json(body);
     return;
   }
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+   
   const { accessToken: _a, refreshToken: _r, ...rest } = body;
   res.status(status).json(rest);
 }

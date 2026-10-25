@@ -178,7 +178,7 @@ export function createApp(pool: Pool) {
     })
   );
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+   
   app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
     if (err instanceof service.DisputeError) return res.status(err.status).json({ error: err.code, message: err.message });
     if (err instanceof InvalidTransitionError) return res.status(409).json({ error: 'invalid_transition', message: err.message });

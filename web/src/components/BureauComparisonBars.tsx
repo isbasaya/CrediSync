@@ -1,4 +1,4 @@
-import { scoreBandTokens, getScoreBand } from '../../../design-system/tokens';
+import { scoreBandTokens } from '../../../design-system/tokens';
 import type { BureauScore } from '../lib/types';
 
 const BUREAU_LABELS: Record<BureauScore['bureau'], string> = {
@@ -20,7 +20,7 @@ export function BureauComparisonBars({ scores }: { scores: BureauScore[] }) {
     <div className="flex flex-col gap-3">
       {scores.map((entry) => {
         const hasScore = entry.score !== null;
-        const band = hasScore ? getScoreBand(entry.score!) : null;
+        const band = entry.scoreBand;
         const tokens = band ? scoreBandTokens[band] : null;
         const widthPct = hasScore ? Math.max(4, (entry.score! / MAX_SCORE) * 100) : 0;
 

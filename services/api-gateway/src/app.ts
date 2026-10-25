@@ -221,7 +221,7 @@ export function createApp(pool: Pool, config: GatewayConfig = loadConfig()) {
 
   app.use('/api', (_req, res) => res.status(404).json({ error: 'not_found' }));
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+   
   app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
     if (err instanceof UpstreamError) return res.status(err.status).json({ error: err.message, traceId: req.traceId });
     if (err instanceof ReadinessError) return res.status(err.status).json({ error: err.code, message: err.message });

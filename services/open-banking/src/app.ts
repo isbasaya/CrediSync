@@ -111,7 +111,7 @@ export function createApp(pool: Pool, adapters: Record<IngestionSource, OpenBank
     })
   );
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+   
   app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
     if (err instanceof db.OpenBankingError) return res.status(err.status).json({ error: err.code, message: err.message });
     if (err instanceof OpenBankingFetchError) {

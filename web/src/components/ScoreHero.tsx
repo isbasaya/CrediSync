@@ -1,4 +1,4 @@
-import { scoreBandTokens, getScoreBand, type ScoreBand } from '../../../design-system/tokens';
+import { scoreBandTokens, type ScoreBand } from '../../../design-system/tokens';
 import type { BureauScore } from '../lib/types';
 import { RefreshIcon } from './icons';
 
@@ -81,7 +81,8 @@ export function ScoreHero({ score, band, bureauScores, lastRefreshedAt, refreshi
       <div className="mt-8 grid grid-cols-3 gap-3 border-t border-teal-200/70 pt-6">
         {bureauScores.map((entry, i) => {
           const hasScore = entry.score !== null;
-          const entryBand = hasScore ? getScoreBand(entry.score!) : null;
+          // Band comes from the API, computed on the bureau's normalised scale.
+          const entryBand = entry.scoreBand;
           const entryTokens = entryBand ? scoreBandTokens[entryBand] : null;
           return (
             <div
