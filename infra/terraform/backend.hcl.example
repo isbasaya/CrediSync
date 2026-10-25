@@ -1,0 +1,5 @@
+bucket         = "<org>-credisync-tfstate"
+key            = "staging/terraform.tfstate"
+region         = "af-south-1"
+dynamodb_table = "credisync-tflock"
+encrypt        = true

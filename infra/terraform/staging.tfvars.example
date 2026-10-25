@@ -1,0 +1,18 @@
+environment         = "staging"
+api_domain          = "api.staging.credisync.co.za"
+web_origins         = ["https://app.staging.credisync.co.za", "https://admin.staging.credisync.co.za"]
+web_app_url         = "https://app.staging.credisync.co.za"
+acm_certificate_arn = "arn:aws:acm:af-south-1:<account>:certificate/<id>"
+email_domain        = "staging.credisync.co.za"
+email_from_address  = "no-reply@staging.credisync.co.za"
+ops_email           = "ops@credisync.co.za"
+
+# Cheaper staging footprint
+db_instance_class     = "db.t4g.small"
+db_multi_az           = false
+nat_gateway_per_az    = false
+service_desired_count = 1
+
+# Fill in once Stitch issues credentials (the client secret goes in Secrets Manager)
+stitch_client_id    = ""
+stitch_redirect_uri = "https://app.staging.credisync.co.za/bank/callback"

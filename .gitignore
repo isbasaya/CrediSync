@@ -59,3 +59,9 @@ logs/
 # Claude Code local state
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
+
+# Terraform
+**/.terraform/
+*.tfvars
+!*.tfvars.example
+backend.hcl
