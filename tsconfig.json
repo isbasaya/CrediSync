@@ -1,0 +1,11 @@
+{
+  "exclude": ["node_modules", "dist", ".next", "coverage"],
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "types": ["vitest/globals"]
+  }
+}

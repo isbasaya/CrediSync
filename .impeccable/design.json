@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-17T11:10:00Z",
+  "title": "Design System: CrediSync — Home Ground",
+  "extensions": {
+    "colorMeta": {
+      "teal-primary": { "role": "primary", "displayName": "Home Ground Teal", "canonical": "#0B7A70", "tonalRamp": ["#04302C", "#075C53", "#0B7A70", "#0D9488", "#14B8A6", "#8FE0D3", "#CCFBF1", "#EFFCF9"] },
+      "ink": { "role": "neutral", "displayName": "Ink", "canonical": "#12181F", "tonalRamp": ["#0B0F14", "#12181F", "#1C242D", "#3F4A57", "#6B7684", "#94A3B8", "#CBD5E1", "#F1F5F9"] },
+      "ground": { "role": "neutral", "displayName": "Ivory Ground", "canonical": "#F5F7F8", "tonalRamp": ["#E2E6EA", "#EDF0F3", "#EEF1F3", "#F1F5F9", "#F5F7F8", "#F8FAFC", "#FBFCFD", "#FFFFFF"] },
+      "score-good": { "role": "status", "displayName": "Score Good", "canonical": "#16A34A", "tonalRamp": ["#15803D", "#16A34A", "#22C55E", "#DCFCE7"] },
+      "score-caution": { "role": "status", "displayName": "Score Caution", "canonical": "#D97706", "tonalRamp": ["#B45309", "#D97706", "#F59E0B", "#FEF3C7"] },
+      "score-risk": { "role": "status", "displayName": "Score Risk", "canonical": "#DC2626", "tonalRamp": ["#B91C1C", "#DC2626", "#EF4444", "#FEE2E2"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Score Display", "purpose": "The unified score numeral only — nowhere else." },
+      "headline": { "displayName": "Headline", "purpose": "Section and card titles." },
+      "body": { "displayName": "Body", "purpose": "Descriptive copy, warning banners." },
+      "label": { "displayName": "Label", "purpose": "Table headers, bureau chip labels, uppercase tracked caps." }
+    },
+    "shadows": [
+      { "name": "sm", "value": "0 1px 2px 0 rgba(15,23,32,0.06)", "purpose": "Default rest state for every white card/panel." },
+      { "name": "md", "value": "0 4px 10px -2px rgba(15,23,32,0.10), 0 2px 4px -2px rgba(15,23,32,0.06)", "purpose": "Reserved for raised elements above card level (modals, popovers) — unused by shipped components so far." },
+      { "name": "glow", "value": "0 0 0 4px rgba(11,122,112,0.16)", "purpose": "Focus ring / active halo. A ring, never elevation." }
+    ],
+    "motion": [
+      { "name": "ease-unfold", "value": "cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Exponential ease-out for the signature bureau-settle / score-assemble sequence." },
+      { "name": "ease-default", "value": "cubic-bezier(0.4, 0, 0.2, 1)", "purpose": "Default hover/focus color and border transitions." }
+    ],
+    "breakpoints": [
+      { "name": "xs", "value": "360px" },
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" },
+      { "name": "2xl", "value": "1536px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The single most important action on an error/empty state.",
+      "html": "<button class=\"ds-btn-primary\">Try again</button>",
+      "css": ".ds-btn-primary { background: #0B7A70; color: #FFFFFF; padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 0.875rem; border: none; cursor: pointer; transition: background 0.2s cubic-bezier(0.4,0,0.2,1); } .ds-btn-primary:hover { background: #075C53; } .ds-btn-primary:focus-visible { outline: 2px solid #0B7A70; outline-offset: 2px; } .ds-btn-primary:disabled { cursor: not-allowed; opacity: 0.5; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Lower-stakes actions, e.g. \"Refresh from bureaus\".",
+      "html": "<button class=\"ds-btn-secondary\">Refresh from bureaus</button>",
+      "css": ".ds-btn-secondary { background: #FFFFFF; color: #12181F; padding: 8px 16px; border-radius: 8px; border: 1px solid #E2E6EA; font-weight: 600; font-size: 0.875rem; cursor: pointer; transition: color 0.2s, border-color 0.2s; } .ds-btn-secondary:hover { border-color: #0B7A70; color: #075C53; }"
+    },
+    {
+      "name": "Status Badge",
+      "kind": "chip",
+      "refersTo": "badge",
+      "description": "Score band or account status — tinted pill, never outline-only.",
+      "html": "<span class=\"ds-badge ds-badge--caution\">Fair</span>",
+      "css": ".ds-badge { display: inline-flex; align-items: center; gap: 6px; border-radius: 9999px; padding: 4px 12px; font-size: 0.75rem; font-weight: 600; } .ds-badge--good { background: #DCFCE7; color: #15803D; } .ds-badge--caution { background: #FEF3C7; color: #B45309; } .ds-badge--risk { background: #FEE2E2; color: #B91C1C; }"
+    },
+    {
+      "name": "Score Hero",
+      "kind": "custom",
+      "refersTo": "score-hero",
+      "description": "The signature component: flat teal-tinted region (no border, no shadow) carrying the unified score numeral, band badge, sync provenance, and the bureau-settle/score-assemble motion.",
+      "html": "<div class=\"ds-score-hero\"><div class=\"ds-score-hero__figure\">612</div><span class=\"ds-badge ds-badge--caution\">Fair</span></div>",
+      "css": ".ds-score-hero { background: #EFFCF9; border-radius: 24px; padding: 40px; } .ds-score-hero__figure { font-family: 'JetBrains Mono', ui-monospace, monospace; font-weight: 700; font-size: 4.5rem; line-height: 1.25; letter-spacing: -0.025em; color: #12181F; font-variant-numeric: tabular-nums; }"
+    },
+    {
+      "name": "Account Row (severity-led)",
+      "kind": "custom",
+      "refersTo": "account-row",
+      "description": "A table/list row whose creditor name grows one type step and goes semibold when its status is judgement or default — severity reads from type weight before the badge is even parsed.",
+      "html": "<div class=\"ds-account-row ds-account-row--urgent\"><span class=\"ds-account-row__name\">Nedbank Home Loan</span><span class=\"ds-badge ds-badge--risk\">Judgement</span></div>",
+      "css": ".ds-account-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-top: 1px solid #EDF0F3; } .ds-account-row__name { color: #12181F; font-weight: 500; } .ds-account-row--urgent .ds-account-row__name { font-size: 1rem; font-weight: 600; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Home Ground",
+    "overview": "CrediSync should read like the banking app its audience already trusts every day — Capitec, Discovery, FNB — not an imported navy-glass SaaS dashboard performing trustworthiness through darkness and blue gradients. The system is light, high-contrast, and confident: one accent color (a deep teal, deliberately not blue) carries brand weight, bold rounded numerals replace gauges and rings, and hierarchy is carried by type scale and weight rather than uniform card chrome. This is a redesign: the prior dark navy/glass system was evidence of what the product does, not a constraint on what it looks like, and it has been fully retired for new work. The system's signature move is the \"assemble\" interaction on the unified score: the three bureau readings settle into place first, and the unified score assembles a beat behind them — orchestration made visible rather than merely claimed. This is an Operate surface: expression never outranks scanability, and severity is always legible before the reader has to think about it.",
+    "keyCharacteristics": [
+      "Light ivory ground with white surface panels — never dark-mode-by-default",
+      "One confident teal accent, never blue, never the score-band semantic colors",
+      "Bold tabular-mono numerals for every score, balance, and reference figure",
+      "Severity carries visual weight: the worst problem is set larger, not just colored differently",
+      "No uniform icon+heading+stat card grids; no progress rings or gauges standing in for content"
+    ],
+    "rules": [
+      { "name": "The One Accent Rule", "body": "Teal is the only saturated brand color on the page. Everything that is not brand or status stays neutral ink/ivory/white — no secondary decorative color, no gradient.", "section": "colors" },
+      { "name": "The Reserved Semantics Rule", "body": "Green/amber/red exist only to answer \"is this account/score okay?\" — never as a brand accent, never on a button, never on a nav item.", "section": "colors" },
+      { "name": "The Tabular Numerals Rule", "body": "Any figure that represents money, a score, or a count that can change on refresh renders in monospace with tabular-nums — digits never reflow or jitter as values update.", "section": "typography" },
+      { "name": "No Kicker Rule", "body": "No small-caps eyebrow label ever sits above a heading. The heading carries its own weight.", "section": "typography" },
+      { "name": "The Hero-Is-Not-A-Card Rule", "body": "Exactly one region per page may use the flat tinted-wash treatment (no border, no shadow): the primary hero. Every other content region is a bordered white panel.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do keep teal as the only saturated brand color; every other surface stays neutral ink/ivory/white.",
+      "Do render every score, balance, and count in tabular monospace so digits never jitter.",
+      "Do let severity change type size and weight, not just badge color.",
+      "Do keep the hero flat and card-free; card chrome is reserved for supporting sections.",
+      "Do check xs (360px) explicitly for any new stat grid or multi-column row."
+    ],
+    "donts": [
+      "Don't reintroduce dark navy/glass surfaces, glowing progress rings, or blue as a brand color.",
+      "Don't reuse green/amber/red as decoration, navigation, or brand color.",
+      "Don't build a uniform grid of same-size icon+heading+stat cards.",
+      "Don't add a kicker or eyebrow label above any heading.",
+      "Don't ship a second flat-wash hero-style region on the same page as the primary hero."
+    ]
+  }
+}

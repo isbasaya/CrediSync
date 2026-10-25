@@ -166,6 +166,19 @@ CREATE INDEX idx_users_sa_id_hash    ON users (sa_id_hash);
 CREATE INDEX idx_users_created_at    ON users (created_at);
 
 -- ---------------------------------------------------------------------------
+-- Table: user_passwords
+--
+-- Stores bcrypt password hashes separately from the users table so the
+-- password column can never leak via a SELECT * on users. One row per user.
+-- ---------------------------------------------------------------------------
+CREATE TABLE user_passwords (
+    user_id         UUID        PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    password_hash   TEXT        NOT NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ---------------------------------------------------------------------------
 -- Table: credit_profiles
 --
 -- Unified multi-bureau credit profile for a user after entity resolution.

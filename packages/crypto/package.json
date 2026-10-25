@@ -1,0 +1,19 @@
+{
+  "name": "@credisync/crypto",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Envelope encryption with KMS-ready interface for SA ID encryption",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "pino": "^9.3.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "typescript": "^5.5.4"
+  }
+}

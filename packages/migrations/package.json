@@ -1,0 +1,23 @@
+{
+  "name": "@credisync/migrations",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Database migration runner and migration files for CrediSync",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "migrate": "node dist/runner.js",
+    "migrate:up": "node dist/runner.js up",
+    "migrate:down": "node dist/runner.js down",
+    "migrate:create": "node dist/runner.js create"
+  },
+  "dependencies": {
+    "pg": "^8.12.0",
+    "pino": "^9.3.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "@types/pg": "^8.11.6",
+    "typescript": "^5.5.4"
+  }
+}

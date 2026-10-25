@@ -1,14 +1,15 @@
 // lib/theme/app_theme.dart
 //
-// CrediSync Flutter Theme
+// CrediSync Flutter Theme — "Home Ground"
 //
 // Implements the design tokens from design-system/tokens.ts as a Dart/Flutter
 // ThemeData. All colour constants mirror the HEX values defined in the shared
-// design-token source of truth.
+// design-token source of truth. Light, high-contrast, one confident teal
+// accent — see DESIGN.md at the project root for the full system.
 //
 // Usage:
 //   MaterialApp(
-//     theme: AppTheme.dark,
+//     theme: AppTheme.light,
 //     ...
 //   )
 
@@ -18,30 +19,20 @@ import 'package:flutter/material.dart';
 // Primitive colour constants
 // ---------------------------------------------------------------------------
 abstract class _Primitives {
-  // Navy / brand blues
-  static const navy950 = Color(0xFF040D1A);
-  static const navy900 = Color(0xFF071428);
-  static const navy800 = Color(0xFF0D2247);
-  static const navy700 = Color(0xFF0F3460);
-  static const navy600 = Color(0xFF1A4F8A);
-  static const navy500 = Color(0xFF2563EB);
-  static const navy400 = Color(0xFF3B82F6);
-  static const navy300 = Color(0xFF93C5FD);
-  static const navy200 = Color(0xFFBFDBFE);
-  static const navy100 = Color(0xFFDBEAFE);
-  static const navy050 = Color(0xFFEFF6FF);
+  // Ink — near-black text/ground primitive for the light "Home Ground" world
+  static const ink800 = Color(0xFF12181F);
+
+  // Teal — the single brand accent. Not blue (the retired identity) and not
+  // green/amber/red (reserved for score-band and account-status semantics).
+  static const teal800 = Color(0xFF075C53);
+  static const teal700 = Color(0xFF0B7A70);
+  static const teal600 = Color(0xFF0D9488);
+  static const teal050 = Color(0xFFEFFCF9);
 
   // Neutrals / slate
-  static const slate900 = Color(0xFF0F172A);
-  static const slate800 = Color(0xFF1E293B);
-  static const slate700 = Color(0xFF334155);
   static const slate600 = Color(0xFF475569);
-  static const slate500 = Color(0xFF64748B);
   static const slate400 = Color(0xFF94A3B8);
-  static const slate300 = Color(0xFFCBD5E1);
-  static const slate200 = Color(0xFFE2E8F0);
   static const slate100 = Color(0xFFF1F5F9);
-  static const slate050 = Color(0xFFF8FAFC);
   static const white    = Color(0xFFFFFFFF);
 
   // Status / semantic
@@ -60,9 +51,7 @@ abstract class _Primitives {
   static const red500 = Color(0xFFEF4444);
   static const red100 = Color(0xFFFEE2E2);
 
-  static const teal600 = Color(0xFF0D9488);
-  static const teal500 = Color(0xFF14B8A6);
-  static const teal100 = Color(0xFFCCFBF1);
+  static const purple600 = Color(0xFF9333EA);
 }
 
 // ---------------------------------------------------------------------------
@@ -89,6 +78,31 @@ class ScoreBandTheme {
     if (score >= 614) return CreditScoreBand.fair;
     if (score >= 583) return CreditScoreBand.poor;
     return CreditScoreBand.veryPoor;
+  }
+
+  /// Looks up theme colours directly from a raw bureau/DB band string
+  /// ('excellent' | 'good' | 'fair' | 'poor' | 'very_poor'), the shape the
+  /// API actually returns. Falls back to a neutral slate for null/unknown.
+  static ScoreBandTheme fromBandString(String? band) {
+    switch (band) {
+      case 'excellent':
+        return values[CreditScoreBand.excellent]!;
+      case 'good':
+        return values[CreditScoreBand.good]!;
+      case 'fair':
+        return values[CreditScoreBand.fair]!;
+      case 'poor':
+        return values[CreditScoreBand.poor]!;
+      case 'very_poor':
+        return values[CreditScoreBand.veryPoor]!;
+      default:
+        return const ScoreBandTheme(
+          background: _Primitives.slate100,
+          foreground: _Primitives.slate600,
+          icon: _Primitives.slate400,
+          label: 'Unknown',
+        );
+    }
   }
 
   static const Map<CreditScoreBand, ScoreBandTheme> values = {
@@ -171,6 +185,32 @@ class AccountStatusTheme {
 }
 
 // ---------------------------------------------------------------------------
+// Dispute status tokens — used by disputes_screen.dart
+// ---------------------------------------------------------------------------
+class DisputeStatusTheme {
+  final Color background;
+  final Color foreground;
+
+  const DisputeStatusTheme({required this.background, required this.foreground});
+
+  static DisputeStatusTheme forStatus(String status) {
+    switch (status) {
+      case 'resolved_upheld':
+        return const DisputeStatusTheme(background: _Primitives.green100, foreground: _Primitives.green700);
+      case 'resolved_rejected':
+        return const DisputeStatusTheme(background: _Primitives.red100, foreground: _Primitives.red700);
+      case 'submitted':
+      case 'under_review':
+        return const DisputeStatusTheme(background: _Primitives.amber100, foreground: _Primitives.amber700);
+      case 'escalated_ncr':
+        return DisputeStatusTheme(background: _Primitives.purple600.withValues(alpha: 0.12), foreground: _Primitives.purple600);
+      default:
+        return const DisputeStatusTheme(background: _Primitives.slate100, foreground: _Primitives.slate600);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Custom colour extension (accessible via Theme.of(context).extension)
 // ---------------------------------------------------------------------------
 class CrediSyncColors extends ThemeExtension<CrediSyncColors> {
@@ -221,24 +261,24 @@ class CrediSyncColors extends ThemeExtension<CrediSyncColors> {
     required this.alertInfo,
   });
 
-  static const dark = CrediSyncColors(
-    bgBase:        _Primitives.navy900,
-    bgSurface:     _Primitives.navy800,
-    bgCard:        _Primitives.navy700,
-    bgMuted:       _Primitives.slate800,
-    textPrimary:   _Primitives.white,
-    textSecondary: _Primitives.slate300,
-    textMuted:     _Primitives.slate400,
-    textLink:      _Primitives.navy400,
-    brandPrimary:  _Primitives.navy500,
-    brandHover:    _Primitives.navy600,
-    borderDefault: _Primitives.navy600,
-    borderSubtle:  _Primitives.slate700,
-    borderFocus:   _Primitives.navy400,
-    alertSuccess:  _Primitives.green500,
-    alertWarning:  _Primitives.amber500,
-    alertError:    _Primitives.red500,
-    alertInfo:     _Primitives.navy400,
+  static const light = CrediSyncColors(
+    bgBase:        Color(0xFFF5F7F8),
+    bgSurface:     _Primitives.white,
+    bgCard:        _Primitives.white,
+    bgMuted:       Color(0xFFEEF1F3),
+    textPrimary:   _Primitives.ink800,
+    textSecondary: Color(0xFF3F4A57),
+    textMuted:     Color(0xFF6B7684),
+    textLink:      _Primitives.teal700,
+    brandPrimary:  _Primitives.teal700,
+    brandHover:    _Primitives.teal800,
+    borderDefault: Color(0xFFE2E6EA),
+    borderSubtle:  Color(0xFFEDF0F3),
+    borderFocus:   _Primitives.teal700,
+    alertSuccess:  _Primitives.green600,
+    alertWarning:  _Primitives.amber600,
+    alertError:    _Primitives.red600,
+    alertInfo:     _Primitives.teal600,
   );
 
   @override
@@ -318,7 +358,7 @@ const _textTheme = TextTheme(
     fontWeight: FontWeight.w700,
     letterSpacing: -0.025 * 30,
     height: 1.25,
-    color: _Primitives.white,
+    color: _Primitives.ink800,
   ),
   // Section headings
   headlineMedium: TextStyle(
@@ -327,7 +367,7 @@ const _textTheme = TextTheme(
     fontWeight: FontWeight.w600,
     letterSpacing: -0.025 * 24,
     height: 1.25,
-    color: _Primitives.white,
+    color: _Primitives.ink800,
   ),
   // Card headings
   titleLarge: TextStyle(
@@ -335,7 +375,7 @@ const _textTheme = TextTheme(
     fontSize: 20,
     fontWeight: FontWeight.w600,
     height: 1.25,
-    color: _Primitives.white,
+    color: _Primitives.ink800,
   ),
   // Sub-headings
   titleMedium: TextStyle(
@@ -343,7 +383,7 @@ const _textTheme = TextTheme(
     fontSize: 18,
     fontWeight: FontWeight.w500,
     height: 1.5,
-    color: _Primitives.white,
+    color: _Primitives.ink800,
   ),
   // Body
   bodyLarge: TextStyle(
@@ -351,7 +391,7 @@ const _textTheme = TextTheme(
     fontSize: 16,
     fontWeight: FontWeight.w400,
     height: 1.5,
-    color: _Primitives.slate300,
+    color: Color(0xFF3F4A57),
   ),
   // Secondary body
   bodyMedium: TextStyle(
@@ -359,7 +399,7 @@ const _textTheme = TextTheme(
     fontSize: 14,
     fontWeight: FontWeight.w400,
     height: 1.5,
-    color: _Primitives.slate400,
+    color: Color(0xFF6B7684),
   ),
   // Labels / badges
   labelSmall: TextStyle(
@@ -368,7 +408,7 @@ const _textTheme = TextTheme(
     fontWeight: FontWeight.w500,
     letterSpacing: 0.1 * 12,
     height: 1.5,
-    color: _Primitives.slate400,
+    color: Color(0xFF6B7684),
   ),
 );
 
@@ -376,38 +416,46 @@ const _textTheme = TextTheme(
 // AppTheme
 // ---------------------------------------------------------------------------
 abstract class AppTheme {
-  static ThemeData get dark {
-    const seedColor = _Primitives.navy500;
+  static ThemeData get light {
+    const seedColor = _Primitives.teal700;
 
     return ThemeData(
       useMaterial3:    true,
-      brightness:      Brightness.dark,
-      colorSchemeSeed: seedColor,
+      brightness:      Brightness.light,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: seedColor,
+        brightness: Brightness.light,
+      ).copyWith(
+        primary: _Primitives.teal700,
+        onPrimary: _Primitives.white,
+        surface: _Primitives.white,
+        error: _Primitives.red600,
+      ),
 
-      scaffoldBackgroundColor: _Primitives.navy900,
+      scaffoldBackgroundColor: const Color(0xFFF5F7F8),
 
       // AppBar
       appBarTheme: const AppBarTheme(
-        backgroundColor:  _Primitives.navy800,
-        foregroundColor:  _Primitives.white,
+        backgroundColor:  Colors.transparent,
+        foregroundColor:  _Primitives.ink800,
         elevation:        0,
         centerTitle:      false,
         titleTextStyle: TextStyle(
           fontFamily:  'Inter',
           fontSize:    20,
           fontWeight:  FontWeight.w600,
-          color:       _Primitives.white,
+          color:       _Primitives.ink800,
           letterSpacing: 0,
         ),
       ),
 
       // Cards
-      cardTheme: const CardThemeData(
-        color:        _Primitives.navy700,
+      cardTheme: CardThemeData(
+        color:        _Primitives.white,
         elevation:    0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(16)),
-          side: BorderSide(color: _Primitives.navy600, width: 1),
+          borderRadius: const BorderRadius.all(Radius.circular(16)),
+          side: BorderSide(color: const Color(0xFFE2E6EA)),
         ),
         margin: EdgeInsets.zero,
       ),
@@ -415,7 +463,7 @@ abstract class AppTheme {
       // Elevated button (primary CTA)
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor:  _Primitives.navy500,
+          backgroundColor:  _Primitives.teal700,
           foregroundColor:  _Primitives.white,
           elevation:        0,
           padding:          const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
@@ -433,8 +481,8 @@ abstract class AppTheme {
       // Outlined button (secondary CTA)
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: _Primitives.navy400,
-          side: const BorderSide(color: _Primitives.navy600, width: 1.5),
+          foregroundColor: _Primitives.teal700,
+          side: const BorderSide(color: Color(0xFFE2E6EA), width: 1.5),
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           shape: const RoundedRectangleBorder(
             borderRadius: BorderRadius.all(Radius.circular(12)),
@@ -450,55 +498,68 @@ abstract class AppTheme {
       // Input fields
       inputDecorationTheme: InputDecorationTheme(
         filled:           true,
-        fillColor:        _Primitives.navy800,
+        fillColor:        _Primitives.white,
         contentPadding:   const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        labelStyle: const TextStyle(color: Color(0xFF3F4A57)),
+        hintStyle: const TextStyle(color: Color(0xFF6B7684)),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: _Primitives.navy600),
+          borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: _Primitives.navy600),
+          borderSide: const BorderSide(color: Color(0xFFE2E6EA)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: _Primitives.navy400, width: 2),
+          borderSide: const BorderSide(color: _Primitives.teal700, width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: _Primitives.red500),
         ),
-        hintStyle: const TextStyle(color: _Primitives.slate500),
-        labelStyle: const TextStyle(color: _Primitives.slate400),
       ),
 
       // Divider
       dividerTheme: const DividerThemeData(
-        color:     _Primitives.navy600,
+        color:     Color(0xFFE2E6EA),
         thickness: 1,
         space:     1,
       ),
 
       // Chip (used for score band badges)
-      chipTheme: const ChipThemeData(
-        backgroundColor:  _Primitives.navy800,
-        labelStyle: TextStyle(
+      chipTheme: ChipThemeData(
+        backgroundColor:  const Color(0xFFEEF1F3),
+        labelStyle: const TextStyle(
           fontFamily: 'Inter',
           fontSize:   12,
           fontWeight: FontWeight.w500,
-          color:      _Primitives.slate300,
+          color:      Color(0xFF3F4A57),
         ),
-        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        shape: StadiumBorder(),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        shape: const StadiumBorder(),
       ),
 
       // Bottom navigation
-      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-        backgroundColor:     _Primitives.navy800,
-        selectedItemColor:   _Primitives.navy400,
-        unselectedItemColor: _Primitives.slate500,
-        type:                BottomNavigationBarType.fixed,
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor:     _Primitives.white,
+        indicatorColor:      _Primitives.teal050,
         elevation:           0,
+        surfaceTintColor:    Colors.transparent,
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          final selected = states.contains(WidgetState.selected);
+          return TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 12,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+            color: selected ? _Primitives.teal800 : const Color(0xFF6B7684),
+          );
+        }),
+      ),
+
+      // Progress indicators default to the brand teal
+      progressIndicatorTheme: const ProgressIndicatorThemeData(
+        color: _Primitives.teal700,
       ),
 
       // Text
@@ -506,7 +567,7 @@ abstract class AppTheme {
       fontFamily: 'Inter',
 
       // Custom extension
-      extensions: const [CrediSyncColors.dark],
+      extensions: const [CrediSyncColors.light],
     );
   }
 }

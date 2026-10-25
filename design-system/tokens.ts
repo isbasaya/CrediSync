@@ -1,21 +1,26 @@
 /**
- * CrediSync Design Tokens
+ * CrediSync Design Tokens — "Home Ground"
  *
  * Single source of truth for the visual identity.
- * Consumed by the Tailwind config (web) and referenced by the Flutter theme (mobile).
+ * Consumed by the Tailwind config (web, admin) and referenced by the Flutter theme (mobile).
  *
  * Principles:
- *  - Deep slate/blue palette → institutional trust
+ *  - Light, high-contrast ground with one confident teal accent — the
+ *    grammar of the banking apps this audience already trusts daily
+ *    (Capitec, Discovery, FNB), not an imported navy-glass SaaS template
  *  - High-contrast text pairs (WCAG AA minimum)
  *  - Semantic status colours mapped 1-to-1 to credit-bureau score bands
  *    and database status enum values
+ *  - `navy*` primitives are retained only for surfaces mid-migration
+ *    (see admin/) — new work reaches for `teal`/`ink`, not `navy`
  */
 
 // ---------------------------------------------------------------------------
 // Primitive palette (raw HEX values)
 // ---------------------------------------------------------------------------
 export const primitives = {
-  // Brand blues / slates
+  // Brand blues / slates — legacy scale, kept for surfaces mid-migration.
+  // Do not reach for these in new "Home Ground" work; use `teal` / `ink`.
   navy950:  '#040D1A',
   navy900:  '#071428',
   navy800:  '#0D2247',
@@ -27,6 +32,11 @@ export const primitives = {
   navy200:  '#BFDBFE',
   navy100:  '#DBEAFE',
   navy050:  '#EFF6FF',
+
+  // Ink — near-black text/ground primitive for the light "Home Ground" world
+  ink900:   '#0B0F14',
+  ink800:   '#12181F',
+  ink700:   '#1C242D',
 
   // Neutrals
   slate900: '#0F172A',
@@ -57,40 +67,49 @@ export const primitives = {
   red500:   '#EF4444',
   red100:   '#FEE2E2',
 
-  // Accent / highlight
+  // Accent — the "Home Ground" brand teal. Deliberately not blue (the
+  // incumbent default) and not green/amber/red (reserved for score-band
+  // and account-status semantics below).
+  teal900:  '#04302C',
+  teal800:  '#075C53',
+  teal700:  '#0B7A70',
   teal600:  '#0D9488',
   teal500:  '#14B8A6',
+  teal200:  '#8FE0D3',
   teal100:  '#CCFBF1',
+  teal050:  '#EFFCF9',
 } as const;
 
 // ---------------------------------------------------------------------------
 // Semantic tokens (purpose-driven aliases)
 // ---------------------------------------------------------------------------
 export const semantic = {
-  // Backgrounds
-  bgBase:        primitives.navy900,
-  bgSurface:     primitives.navy800,
-  bgCard:        primitives.navy700,
-  bgMuted:       primitives.slate800,
+  // Backgrounds — a soft ivory ground with white surfaces stacked above
+  // it, the register South Africa's own daily banking apps use, checked
+  // in bright outdoor light as often as indoors.
+  bgBase:        '#F5F7F8',
+  bgSurface:     primitives.white,
+  bgCard:        primitives.white,
+  bgMuted:       '#EEF1F3',
   bgSubtle:      primitives.slate100,
 
   // Text
-  textPrimary:   primitives.white,
-  textSecondary: primitives.slate300,
-  textMuted:     primitives.slate400,
-  textInverse:   primitives.slate900,
-  textLink:      primitives.navy400,
-  textLinkHover: primitives.navy300,
+  textPrimary:   primitives.ink800,
+  textSecondary: '#3F4A57',
+  textMuted:     '#6B7684',
+  textInverse:   primitives.white,
+  textLink:      primitives.teal700,
+  textLinkHover: primitives.teal800,
 
   // Borders
-  borderDefault: primitives.navy600,
-  borderSubtle:  primitives.slate700,
-  borderFocus:   primitives.navy400,
+  borderDefault: '#E2E6EA',
+  borderSubtle:  '#EDF0F3',
+  borderFocus:   primitives.teal700,
 
   // Brand
-  brandPrimary:  primitives.navy500,
-  brandHover:    primitives.navy600,
-  brandActive:   primitives.navy700,
+  brandPrimary:  primitives.teal700,
+  brandHover:    primitives.teal800,
+  brandActive:   primitives.teal900,
 
   // --- Score band / bureau status tokens ---
   // Maps directly to PostgreSQL enum values (see db/schema.sql)
@@ -134,21 +153,23 @@ export const semantic = {
   statusWrittenOffFg:  primitives.slate600,
 
   // Alerts / toasts
-  alertSuccess:  primitives.green500,
-  alertWarning:  primitives.amber500,
-  alertError:    primitives.red500,
-  alertInfo:     primitives.navy400,
+  alertSuccess:  primitives.green600,
+  alertWarning:  primitives.amber600,
+  alertError:    primitives.red600,
+  alertInfo:     primitives.teal600,
 } as const;
 
 // ---------------------------------------------------------------------------
 // Typography
 // ---------------------------------------------------------------------------
 export const typography = {
-  fontFamilySans:  "'Inter', 'DM Sans', ui-sans-serif, system-ui, sans-serif",
+  fontFamilySans:  "var(--font-inter), 'Inter', 'DM Sans', ui-sans-serif, system-ui, sans-serif",
   fontFamilyMono:  "'JetBrains Mono', 'Fira Code', ui-monospace, monospace",
 
   // Scale (rem, base 16 px)
-  size3xl:  '1.875rem', // 30 px – hero numbers (credit score display)
+  size5xl:  '4.5rem',   // 72 px – unified score hero numeral
+  size4xl:  '2.75rem',  // 44 px – bureau numerals, large stat emphasis
+  size3xl:  '1.875rem', // 30 px – section-level emphasis
   size2xl:  '1.5rem',   // 24 px – section headings
   sizeXl:   '1.25rem',  // 20 px – card headings
   sizeLg:   '1.125rem', // 18 px – sub-headings
@@ -206,13 +227,14 @@ export const radii = {
 } as const;
 
 // ---------------------------------------------------------------------------
-// Shadows (dark-theme optimised – use glow rather than drop shadows)
+// Shadows — light-ground depth: real offset plus soft blur, never a
+// zero-offset colour halo standing in for elevation.
 // ---------------------------------------------------------------------------
 export const shadows = {
-  sm:   '0 1px 2px 0 rgba(0,0,0,0.40)',
-  md:   '0 4px 6px -1px rgba(0,0,0,0.50), 0 2px 4px -2px rgba(0,0,0,0.40)',
-  lg:   '0 10px 15px -3px rgba(0,0,0,0.60), 0 4px 6px -4px rgba(0,0,0,0.40)',
-  glow: '0 0 20px 0 rgba(37,99,235,0.35)',   // brand blue glow for focus rings
+  sm:   '0 1px 2px 0 rgba(15,23,32,0.06)',
+  md:   '0 4px 10px -2px rgba(15,23,32,0.10), 0 2px 4px -2px rgba(15,23,32,0.06)',
+  lg:   '0 16px 32px -8px rgba(15,23,32,0.16), 0 4px 8px -4px rgba(15,23,32,0.08)',
+  glow: '0 0 0 4px rgba(11,122,112,0.16)',   // teal focus/active halo — ring, not elevation
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -247,9 +269,11 @@ export const motion = {
   durationFast:   '150ms',
   durationNormal: '200ms',
   durationSlow:   '350ms',
+  durationUnfold: '700ms', // the signature bureau→unified score assembly
   easingDefault:  'cubic-bezier(0.4, 0, 0.2, 1)',
   easingIn:       'cubic-bezier(0.4, 0, 1, 1)',
   easingOut:      'cubic-bezier(0, 0, 0.2, 1)',
+  easingUnfold:   'cubic-bezier(0.16, 1, 0.3, 1)', // exponential ease-out
 } as const;
 
 // ---------------------------------------------------------------------------

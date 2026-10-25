@@ -31,25 +31,6 @@ const config: Config = {
       '2xl': breakpoints['2xl'],
     },
 
-    // -------------------------------------------------------------------------
-    // Spacing (override default to use 4-point grid tokens)
-    // -------------------------------------------------------------------------
-    spacing: {
-      px:   spacing.px,
-      '0':  spacing.s0,
-      '1':  spacing.s1,
-      '2':  spacing.s2,
-      '3':  spacing.s3,
-      '4':  spacing.s4,
-      '5':  spacing.s5,
-      '6':  spacing.s6,
-      '8':  spacing.s8,
-      '10': spacing.s10,
-      '12': spacing.s12,
-      '16': spacing.s16,
-      '20': spacing.s20,
-      '24': spacing.s24,
-    },
 
     // -------------------------------------------------------------------------
     // Border radius
@@ -80,6 +61,8 @@ const config: Config = {
       xl:   [typography.sizeXl,  { lineHeight: typography.lineHeightTight  }],
       '2xl':[typography.size2xl, { lineHeight: typography.lineHeightTight  }],
       '3xl':[typography.size3xl, { lineHeight: typography.lineHeightTight  }],
+      '4xl':[typography.size4xl, { lineHeight: typography.lineHeightTight, letterSpacing: typography.letterSpacingTight }],
+      '5xl':[typography.size5xl, { lineHeight: typography.lineHeightTight, letterSpacing: typography.letterSpacingTight }],
     },
     fontWeight: {
       light:    typography.weightLight,
@@ -153,9 +136,19 @@ const config: Config = {
         100: primitives.red100,
       },
       teal: {
+        900: primitives.teal900,
+        800: primitives.teal800,
+        700: primitives.teal700,
         600: primitives.teal600,
         500: primitives.teal500,
+        200: primitives.teal200,
         100: primitives.teal100,
+        '050': primitives.teal050,
+      },
+      ink: {
+        900: primitives.ink900,
+        800: primitives.ink800,
+        700: primitives.ink700,
       },
 
       // Semantic aliases exposed as Tailwind utilities
@@ -218,32 +211,57 @@ const config: Config = {
     },
 
     extend: {
+      // Named 4-point-grid aliases layered on top of Tailwind's full
+      // default spacing scale (not a replacement — replacing `spacing`
+      // wholesale drops the half-steps like 0.5/1.5/2.5 that badges and
+      // icon-gap utilities rely on). Values match Tailwind's defaults
+      // exactly, so this only adds the named tokens, it changes nothing.
+      spacing: {
+        px:   spacing.px,
+        '0':  spacing.s0,
+        '1':  spacing.s1,
+        '2':  spacing.s2,
+        '3':  spacing.s3,
+        '4':  spacing.s4,
+        '5':  spacing.s5,
+        '6':  spacing.s6,
+        '8':  spacing.s8,
+        '10': spacing.s10,
+        '12': spacing.s12,
+        '16': spacing.s16,
+        '20': spacing.s20,
+        '24': spacing.s24,
+      },
+
       // Smooth transitions
       transitionDuration: {
         fast:   '150ms',
         normal: '200ms',
         slow:   '350ms',
+        unfold: '700ms',
       },
       transitionTimingFunction: {
         default: 'cubic-bezier(0.4, 0, 0.2, 1)',
         in:      'cubic-bezier(0.4, 0, 1, 1)',
         out:     'cubic-bezier(0, 0, 0.2, 1)',
+        unfold:  'cubic-bezier(0.16, 1, 0.3, 1)',
       },
 
-      // Score ring animation
+      // NOTE: the signature "bureau settle / score assemble" interaction
+      // needs a per-item computed delay (i * 90ms), so it's driven by an
+      // inline `style` in ScoreHero.tsx rather than these utility classes
+      // — Tailwind's JIT purge can't see a dynamic class name to keep a
+      // keyframe alive. Those two keyframes are declared directly in
+      // globals.css instead, where they're never purged. `fade-in` stays
+      // here because every usage is a static `animate-fade-in` class.
       keyframes: {
-        'score-ring-fill': {
-          '0%':   { strokeDashoffset: '1' },
-          '100%': { strokeDashoffset: 'var(--offset)' },
-        },
         'fade-in': {
           from: { opacity: '0', transform: 'translateY(4px)' },
           to:   { opacity: '1', transform: 'translateY(0)' },
         },
       },
       animation: {
-        'score-ring': 'score-ring-fill 1s cubic-bezier(0.4,0,0.2,1) forwards',
-        'fade-in':    'fade-in 200ms cubic-bezier(0,0,0.2,1) forwards',
+        'fade-in': 'fade-in 200ms cubic-bezier(0,0,0.2,1) forwards',
       },
     },
   },

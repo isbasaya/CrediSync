@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: credisync
+      POSTGRES_USER: credisync
+      POSTGRES_PASSWORD: credisync_dev
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+
+  auth:
+    build:
+      context: .
+      dockerfile: services/auth/Dockerfile
+    ports:
+      - '4004:4004'
+    env_file:
+      - services/auth/.env
+    depends_on:
+      - postgres
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - '4000:4000'
+    env_file:
+      - services/api-gateway/.env
+    environment:
+      - NODE_ENV=development
+      - PORT=4000
+    depends_on:
+      - postgres
+      - auth
+      - bureau-ingestion
+      - dispute-engine
+      - open-banking
+
+  bureau-ingestion:
+    build:
+      context: .
+      dockerfile: services/bureau-ingestion/Dockerfile
+    ports:
+      - '4001:4001'
+    env_file:
+      - services/bureau-ingestion/.env
+    depends_on:
+      - postgres
+
+  dispute-engine:
+    build:
+      context: .
+      dockerfile: services/dispute-engine/Dockerfile
+    ports:
+      - '4002:4002'
+    env_file:
+      - services/dispute-engine/.env
+    depends_on:
+      - postgres
+
+  open-banking:
+    build:
+      context: .
+      dockerfile: services/open-banking/Dockerfile
+    ports:
+      - '4003:4003'
+    env_file:
+      - services/open-banking/.env
+    depends_on:
+      - postgres
+
+volumes:
+  pgdata:
