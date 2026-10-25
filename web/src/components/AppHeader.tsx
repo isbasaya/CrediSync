@@ -8,6 +8,7 @@ import { LogoMark } from './icons';
 const NAV = [
   { href: '/', label: 'Credit profile' },
   { href: '/disputes', label: 'Disputes' },
+  { href: '/bank', label: 'Bank' },
   { href: '/privacy', label: 'Privacy' },
 ];
 

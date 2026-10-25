@@ -1,6 +1,6 @@
 import type { Pool, PoolClient } from 'pg';
 import { withUser, writeAudit, enqueueEvent } from '@credisync/db';
-import { decryptFromBytes, encryptToBytes } from '@credisync/crypto';
+import { decryptFromBytes, encryptToBytes, sha256Hex } from '@credisync/crypto';
 import type { FinancialHealthSnapshot, IngestionSource } from './types';
 
 export class OpenBankingError extends Error {
@@ -29,17 +29,34 @@ async function assertConsent(client: PoolClient, userId: string): Promise<void> 
 }
 
 /** Stores the provider token from the consent/link flow, encrypted. The token is never returned to clients. */
+export interface StoredTokens {
+  accessToken: string;
+  refreshToken: string | null;
+  expiresAt: Date | null;
+}
+
+async function sealTokens(tokens: StoredTokens): Promise<Buffer> {
+  return encryptToBytes(
+    JSON.stringify({ accessToken: tokens.accessToken, refreshToken: tokens.refreshToken }),
+  );
+}
+
+/**
+ * Stores provider tokens from the consent flow, encrypted. Tokens are never
+ * returned to clients. Requires open-banking consent at the moment of linking.
+ */
 export async function createLink(
   pool: Pool,
   userId: string,
   source: IngestionSource,
-  accountLinkToken: string,
+  tokens: StoredTokens,
 ) {
   return withUser(pool, userId, async (client) => {
     await assertConsent(client, userId);
     const r = await client.query<{ id: string; created_at: Date }>(
-      `INSERT INTO credisync.open_banking_links (user_id, source, token_encrypted) VALUES ($1, $2, $3) RETURNING id, created_at`,
-      [userId, source, await encryptToBytes(accountLinkToken)],
+      `INSERT INTO credisync.open_banking_links (user_id, source, token_encrypted, token_expires_at)
+       VALUES ($1, $2, $3, $4) RETURNING id, created_at`,
+      [userId, source, await sealTokens(tokens), tokens.expiresAt],
     );
     await writeAudit(client, {
       userId,
@@ -57,6 +74,81 @@ export async function createLink(
     });
     return { id: r.rows[0]!.id, source, createdAt: r.rows[0]!.created_at.toISOString() };
   });
+}
+
+/** Replaces a link's tokens after a refresh (Stitch rotates refresh tokens on every use). */
+export async function saveLinkTokens(
+  pool: Pool,
+  userId: string,
+  linkId: string,
+  tokens: StoredTokens,
+): Promise<void> {
+  const sealed = await sealTokens(tokens);
+  await withUser(pool, userId, (client) =>
+    client.query(
+      `UPDATE credisync.open_banking_links
+       SET token_encrypted = $2, token_expires_at = $3, last_refreshed_at = NOW()
+       WHERE id = $1 AND revoked_at IS NULL`,
+      [linkId, sealed, tokens.expiresAt],
+    ),
+  );
+}
+
+const STATE_TTL_MINUTES = 10;
+
+/** Records the PKCE verifier and nonce for one consent redirect, keyed by a hash of `state`. */
+export async function createLinkState(
+  pool: Pool,
+  userId: string,
+  source: IngestionSource,
+  request: { state: string; codeVerifier: string; nonce: string },
+): Promise<void> {
+  await withUser(pool, userId, async (client) => {
+    await assertConsent(client, userId);
+    await client.query(
+      `INSERT INTO credisync.oauth_link_states (state_hash, user_id, provider, code_verifier_encrypted, nonce, expires_at)
+       VALUES ($1, $2, $3, $4, $5, NOW() + make_interval(mins => $6))`,
+      [
+        sha256Hex(request.state),
+        userId,
+        source,
+        await encryptToBytes(request.codeVerifier),
+        request.nonce,
+        STATE_TTL_MINUTES,
+      ],
+    );
+  });
+}
+
+/**
+ * Consumes a state exactly once. Fails if it is unknown, expired, already
+ * used, or belongs to a different user (RLS makes another user's state
+ * invisible) — the CSRF protection for the redirect.
+ */
+export async function consumeLinkState(
+  pool: Pool,
+  userId: string,
+  state: string,
+): Promise<{ source: IngestionSource; codeVerifier: string }> {
+  const row = await withUser(pool, userId, async (client) => {
+    const r = await client.query(
+      `UPDATE credisync.oauth_link_states SET used_at = NOW()
+       WHERE state_hash = $1 AND used_at IS NULL AND expires_at > NOW()
+       RETURNING provider, code_verifier_encrypted`,
+      [sha256Hex(state)],
+    );
+    return r.rows[0];
+  });
+  if (!row)
+    throw new OpenBankingError(
+      400,
+      'invalid_state',
+      'This bank connection attempt expired. Please start again.',
+    );
+  return {
+    source: row.provider,
+    codeVerifier: await decryptFromBytes(row.code_verifier_encrypted),
+  };
 }
 
 export async function listLinks(pool: Pool, userId: string) {
@@ -85,15 +177,16 @@ export async function revokeLink(pool: Pool, userId: string, linkId: string): Pr
 }
 
 /** Re-checks consent and decrypts the provider token for one ingest. */
+/** Re-checks consent and decrypts the provider tokens for one ingest. */
 export async function loadLinkToken(
   pool: Pool,
   userId: string,
   linkId: string,
-): Promise<{ source: IngestionSource; token: string }> {
+): Promise<{ source: IngestionSource } & StoredTokens> {
   const row = await withUser(pool, userId, async (client) => {
     await assertConsent(client, userId);
     const r = await client.query(
-      'SELECT source, token_encrypted, revoked_at FROM credisync.open_banking_links WHERE id = $1',
+      'SELECT source, token_encrypted, token_expires_at, revoked_at FROM credisync.open_banking_links WHERE id = $1',
       [linkId],
     );
     return r.rows[0];
@@ -105,7 +198,27 @@ export async function loadLinkToken(
       'link_revoked',
       'This bank link was disconnected. Link your account again.',
     );
-  return { source: row.source, token: await decryptFromBytes(row.token_encrypted) };
+  const plain = await decryptFromBytes(row.token_encrypted);
+  // Older links stored the bare access token; newer ones store JSON.
+  const parsed = plain.startsWith('{')
+    ? (JSON.parse(plain) as { accessToken: string; refreshToken: string | null })
+    : { accessToken: plain, refreshToken: null };
+  return {
+    source: row.source,
+    accessToken: parsed.accessToken,
+    refreshToken: parsed.refreshToken,
+    expiresAt: row.token_expires_at ? new Date(row.token_expires_at) : null,
+  };
+}
+
+/** Marks a link unusable (e.g. the provider rejected its refresh token). */
+export async function expireLink(pool: Pool, userId: string, linkId: string): Promise<void> {
+  await withUser(pool, userId, (client) =>
+    client.query(
+      'UPDATE credisync.open_banking_links SET token_encrypted = NULL, revoked_at = NOW() WHERE id = $1 AND revoked_at IS NULL',
+      [linkId],
+    ),
+  );
 }
 
 const BATCH_SIZE = 500;

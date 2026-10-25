@@ -66,7 +66,11 @@ services:
 
   open-banking:
     build: { context: ., args: { TARGET: services/open-banking } }
-    environment: { <<: *node-env, PORT: '4003', OPEN_BANKING_MODE: sandbox }
+    environment:
+      <<: *node-env
+      PORT: '4003'
+      OPEN_BANKING_MODE: sandbox
+      STITCH_REDIRECT_URI: http://localhost:3000/bank/callback
     depends_on:
       migrate: { condition: service_completed_successfully }
 

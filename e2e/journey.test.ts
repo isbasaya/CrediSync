@@ -255,6 +255,34 @@ describe.skipIf(!testDatabaseAvailable)('consumer and admin journey through the 
     expect(profile.body.bankReadinessTier).toBe('near_prime');
   });
 
+  it('connects a bank account through the consent redirect and scores with bank data', async () => {
+    const origin = { Cookie: cookies, Origin: ORIGIN };
+    const blocked = await api().post('/api/open-banking/links/stitch/start').set(origin);
+    expect(blocked.status).toBe(403); // no open-banking consent yet
+
+    await api().patch('/api/me/consents').set(origin).send({ openBanking: true }).expect(200);
+    const start = await api().post('/api/open-banking/links/stitch/start').set(origin);
+    expect(start.status).toBe(201);
+    const url = new URL(start.body.authorizationUrl);
+
+    const link = await api()
+      .post('/api/open-banking/links/stitch/complete')
+      .set(origin)
+      .send({ code: url.searchParams.get('code'), state: url.searchParams.get('state') });
+    expect(link.status).toBe(201);
+
+    const ingest = await api()
+      .post('/api/open-banking/snapshots/ingest')
+      .set(origin)
+      .send({ linkId: link.body.id, periodStart: '2026-07-01', periodEnd: '2026-09-30' });
+    expect(ingest.status).toBe(201);
+    expect(ingest.body.monthlyNetIncome).toBe(28500);
+
+    await api().post('/api/bank-readiness/score').set(origin).expect(200);
+    const sent = scorerInputs.at(-1) as Record<string, number>;
+    expect(sent.net_income).toBe(28500);
+  });
+
   it('logs out and revokes the session', async () => {
     const logout = await api()
       .post('/api/auth/logout')

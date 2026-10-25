@@ -255,6 +255,14 @@ export function createApp(pool: Pool, config: GatewayConfig = loadConfig()) {
     asyncHandler((req, res) => forward(config.openBankingUrl, '/links', req, res)),
   );
   app.post(
+    '/api/open-banking/links/stitch/start',
+    asyncHandler((req, res) => forward(config.openBankingUrl, '/links/stitch/start', req, res)),
+  );
+  app.post(
+    '/api/open-banking/links/stitch/complete',
+    asyncHandler((req, res) => forward(config.openBankingUrl, '/links/stitch/complete', req, res)),
+  );
+  app.post(
     '/api/open-banking/links',
     asyncHandler((req, res) => forward(config.openBankingUrl, '/links', req, res)),
   );

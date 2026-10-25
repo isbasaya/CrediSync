@@ -10,6 +10,7 @@ import { encryptToBytes, hmacLookup } from '@credisync/crypto';
 import { internalHeaders } from '@credisync/middleware';
 import { createApp } from '../app';
 import { SandboxOpenBankingAdapter } from '../adapters/sandbox.adapter';
+import { SandboxOAuthClient } from '../providers/stitch-oauth';
 
 const ALICE = '11111111-1111-4111-8111-111111111111';
 const MALLORY = '33333333-3333-4333-8333-333333333333';
@@ -22,10 +23,14 @@ describe.skipIf(!testDatabaseAvailable)('open banking (real Postgres, sandbox pr
 
   beforeAll(async () => {
     db = await createTestDatabase();
-    app = createApp(db.pool, {
-      stitch: new SandboxOpenBankingAdapter('stitch'),
-      ozow: new SandboxOpenBankingAdapter('ozow'),
-    });
+    app = createApp(
+      db.pool,
+      {
+        stitch: new SandboxOpenBankingAdapter('stitch'),
+        ozow: new SandboxOpenBankingAdapter('ozow'),
+      },
+      new SandboxOAuthClient('http://localhost:3000/bank/callback'),
+    );
     await withSystem(db.pool, async (c) => {
       for (const [id, email, saId, consent] of [
         [ALICE, 'alice@example.co.za', '8001015009087', false],
@@ -107,5 +112,52 @@ describe.skipIf(!testDatabaseAvailable)('open banking (real Postgres, sandbox pr
       .set(as(ALICE))
       .send({ linkId, periodStart: '2026-08-01', periodEnd: '2026-08-31' });
     expect(res.status).toBe(409);
+  });
+
+  it('links through the consent redirect: one-time state, bound to the user', async () => {
+    const start = await request(app).post('/links/stitch/start').set(as(MALLORY));
+    expect(start.status).toBe(201);
+    const url = new URL(start.body.authorizationUrl);
+    const code = url.searchParams.get('code')!;
+    const state = url.searchParams.get('state')!;
+
+    // Another user cannot complete Mallory's redirect.
+    const hijack = await request(app)
+      .post('/links/stitch/complete')
+      .set(as(ALICE))
+      .send({ code, state });
+    expect(hijack.status).toBe(400);
+
+    const done = await request(app)
+      .post('/links/stitch/complete')
+      .set(as(MALLORY))
+      .send({ code, state });
+    expect(done.status).toBe(201);
+    expect(done.body.source).toBe('stitch');
+
+    const replay = await request(app)
+      .post('/links/stitch/complete')
+      .set(as(MALLORY))
+      .send({ code, state });
+    expect(replay.status).toBe(400);
+  });
+
+  it('refreshes an expiring provider token before ingesting and stores the rotated token', async () => {
+    const links = await request(app).get('/links').set(as(MALLORY));
+    const linkId = links.body.links.find((l: { revokedAt: string | null }) => !l.revokedAt).id;
+    await db.adminPool.query(
+      "UPDATE credisync.open_banking_links SET token_expires_at = NOW() - INTERVAL '1 minute' WHERE id = $1",
+      [linkId],
+    );
+    const ingest = await request(app)
+      .post('/snapshots/ingest')
+      .set(as(MALLORY))
+      .send({ linkId, periodStart: '2026-08-01', periodEnd: '2026-08-31' });
+    expect(ingest.status).toBe(201);
+    const after = await db.adminPool.query(
+      'SELECT token_expires_at > NOW() AS fresh, last_refreshed_at IS NOT NULL AS refreshed FROM credisync.open_banking_links WHERE id = $1',
+      [linkId],
+    );
+    expect(after.rows[0]).toEqual({ fresh: true, refreshed: true });
   });
 });

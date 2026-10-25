@@ -22,6 +22,14 @@ import {
 import { buildFinancialHealthSnapshot } from './aggregation/snapshot-builder';
 import { loadExpenseNorms } from './aggregation/expense-norms';
 import * as db from './db';
+import {
+  OAuthExchangeError,
+  SandboxOAuthClient,
+  StitchOAuthClient,
+  loadStitchConfig,
+  type LinkOAuthClient,
+} from './providers/stitch-oauth';
+import { isLocalEnv } from '@credisync/config';
 import type { IngestionSource } from './types';
 
 const logger = pino({ name: 'open-banking' });
@@ -39,6 +47,20 @@ export function createAdapters(
   }
   return { stitch: new StitchAdapter(), ozow: new OzowAdapter() };
 }
+
+/** Refresh a provider token this long before it expires. */
+const TOKEN_REFRESH_SKEW_MS = 60_000;
+
+export function createOAuthClient(env: NodeJS.ProcessEnv = process.env): LinkOAuthClient | null {
+  if (env.OPEN_BANKING_MODE === 'sandbox') return new SandboxOAuthClient();
+  if (!env.STITCH_CLIENT_ID) return null; // linking disabled until Stitch credentials are configured
+  return new StitchOAuthClient(loadStitchConfig(env));
+}
+
+const completeSchema = z.object({
+  code: z.string().min(1).max(2048),
+  state: z.string().min(32).max(300),
+});
 
 const linkSchema = z.object({
   source: z.enum(INGESTION_SOURCES),
@@ -67,6 +89,7 @@ function invalid(res: Response, err: z.ZodError) {
 export function createApp(
   pool: Pool,
   adapters: Record<IngestionSource, OpenBankingAdapter> = createAdapters(),
+  oauth: LinkOAuthClient | null = createOAuthClient(),
 ) {
   const app = express();
   configureTrustProxy(app);
@@ -83,21 +106,51 @@ export function createApp(
     express.json({ limit: '16kb' }),
   );
 
+  /**
+   * Starts the Stitch consent redirect. The PKCE verifier and nonce stay on
+   * the server (encrypted), bound to this user and a single-use state.
+   */
+  app.post(
+    '/links/stitch/start',
+    asyncHandler(async (req, res) => {
+      if (!oauth)
+        return res
+          .status(503)
+          .json({ error: 'linking_unavailable', message: 'Bank linking is not available yet.' });
+      const request = oauth.buildAuthorizationRequest();
+      await db.createLinkState(pool, req.actingUserId!, 'stitch', request);
+      return res.status(201).json({ authorizationUrl: request.authorizationUrl });
+    }),
+  );
+
+  /** The web callback posts the code and state Stitch returned to it. */
+  app.post(
+    '/links/stitch/complete',
+    asyncHandler(async (req, res) => {
+      if (!oauth) return res.status(503).json({ error: 'linking_unavailable' });
+      const parsed = completeSchema.safeParse(req.body);
+      if (!parsed.success) return invalid(res, parsed.error);
+      const userId = req.actingUserId!;
+      const { codeVerifier } = await db.consumeLinkState(pool, userId, parsed.data.state);
+      const tokens = await oauth.exchangeCode(parsed.data.code, codeVerifier);
+      return res.status(201).json(await db.createLink(pool, userId, 'stitch', tokens));
+    }),
+  );
+
+  /** DEVELOPMENT ONLY: link with a provider token supplied directly (sandbox testing). */
   app.post(
     '/links',
     asyncHandler(async (req, res) => {
+      if (!isLocalEnv()) return res.status(404).json({ error: 'not_found' });
       const parsed = linkSchema.safeParse(req.body);
       if (!parsed.success) return invalid(res, parsed.error);
-      return res
-        .status(201)
-        .json(
-          await db.createLink(
-            pool,
-            req.actingUserId!,
-            parsed.data.source,
-            parsed.data.accountLinkToken,
-          ),
-        );
+      return res.status(201).json(
+        await db.createLink(pool, req.actingUserId!, parsed.data.source, {
+          accessToken: parsed.data.accountLinkToken,
+          refreshToken: null,
+          expiresAt: null,
+        }),
+      );
     }),
   );
 
@@ -127,9 +180,30 @@ export function createApp(
       const { linkId, periodStart, periodEnd } = parsed.data;
 
       const link = await db.loadLinkToken(pool, userId, linkId);
+      let accessToken = link.accessToken;
+      const expiring =
+        link.expiresAt && link.expiresAt.getTime() - Date.now() < TOKEN_REFRESH_SKEW_MS;
+      if (expiring && link.refreshToken && oauth) {
+        try {
+          const fresh = await oauth.refresh(link.refreshToken);
+          await db.saveLinkTokens(pool, userId, linkId, fresh);
+          accessToken = fresh.accessToken;
+        } catch (err) {
+          if (err instanceof OAuthExchangeError && err.reason === 'invalid_grant') {
+            // The consumer revoked access at the bank/Stitch, or the refresh token expired.
+            await db.expireLink(pool, userId, linkId);
+            throw new db.OpenBankingError(
+              409,
+              'link_expired',
+              'Your bank connection has expired. Please link your account again.',
+            );
+          }
+          throw err;
+        }
+      }
       const feed = await adapters[link.source].fetchTransactions({
         userId,
-        accountLinkToken: link.token,
+        accountLinkToken: accessToken,
         periodStart,
         periodEnd,
       });
@@ -157,6 +231,12 @@ export function createApp(
   );
 
   app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
+    if (err instanceof OAuthExchangeError) {
+      return res.status(err.reason === 'invalid_grant' ? 400 : 502).json({
+        error: `link_${err.reason}`,
+        message: 'We couldn’t connect your bank account. Please try again.',
+      });
+    }
     if (err instanceof db.OpenBankingError)
       return res.status(err.status).json({ error: err.code, message: err.message });
     if (err instanceof OpenBankingFetchError) {

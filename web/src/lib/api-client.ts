@@ -41,6 +41,10 @@ const FRIENDLY: Record<string, string> = {
   refresh_too_soon: 'Your reports were refreshed recently. You can refresh again in about an hour.',
   open_banking_consent_required:
     'Give permission to read your bank transactions first (Privacy settings).',
+  invalid_state: 'That bank connection attempt expired. Please start again.',
+  link_expired: 'Your bank connection has expired. Please connect your account again.',
+  link_revoked: 'This bank account was disconnected. Connect it again to continue.',
+  linking_unavailable: 'Connecting a bank account isn’t available yet.',
   dispute_already_open: 'There’s already an open dispute for this account.',
   deadline_not_passed:
     'The bureau still has time to respond. You can escalate once the deadline passes.',
@@ -149,3 +153,28 @@ export const regenerateLetter = (id: string, description: string) =>
   post<Dispute>(`/disputes/${encodeURIComponent(id)}/regenerate-letter`, { description });
 export const submitDispute = (id: string) =>
   post<Dispute>(`/disputes/${encodeURIComponent(id)}/submit`);
+
+// --- Open banking -----------------------------------------------------------
+export interface BankLink {
+  id: string;
+  source: 'stitch' | 'ozow';
+  createdAt: string;
+  revokedAt: string | null;
+}
+export interface IngestResult {
+  snapshotId: string;
+  periodMonths: number;
+  monthlyNetIncome: number;
+  monthlyAffordabilitySurplus: number | null;
+  debtToIncomeRatio: number | null;
+  transactionsStored: number;
+}
+export const listBankLinks = () => request<{ links: BankLink[] }>('/open-banking/links');
+export const startBankLink = () =>
+  post<{ authorizationUrl: string }>('/open-banking/links/stitch/start');
+export const completeBankLink = (code: string, state: string) =>
+  post<BankLink>('/open-banking/links/stitch/complete', { code, state });
+export const disconnectBankLink = (id: string) =>
+  request<void>(`/open-banking/links/${encodeURIComponent(id)}`, { method: 'DELETE' });
+export const ingestBankData = (linkId: string, periodStart: string, periodEnd: string) =>
+  post<IngestResult>('/open-banking/snapshots/ingest', { linkId, periodStart, periodEnd });
