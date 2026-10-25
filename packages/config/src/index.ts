@@ -1,7 +1,9 @@
 import { z } from 'zod';
 
+export { requireSecret, isLocalEnv, MissingSecretError, type SecretOptions } from './secrets';
+
 const baseEnvSchema = z.object({
-  NODE_ENV: z.enum(['development', 'staging', 'production']).default('development'),
+  NODE_ENV: z.enum(['development', 'test', 'staging', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(4000),
 });
 

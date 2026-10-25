@@ -7,17 +7,21 @@
   "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
+    "@credisync/config": "*",
+    "@credisync/crypto": "*",
     "helmet": "^7.1.0",
-    "uuid": "^10.0.0"
+    "jsonwebtoken": "^9.0.2"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
     "@types/node": "^20.14.10",
-    "@types/uuid": "^10.0.0",
     "express": "^4.19.2",
-    "typescript": "^5.5.4"
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.0",
+    "@types/jsonwebtoken": "^9.0.6"
   }
 }

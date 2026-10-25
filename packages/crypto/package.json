@@ -7,13 +7,16 @@
   "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
-    "pino": "^9.3.2"
+    "@credisync/config": "*",
+    "@aws-sdk/client-kms": "^3.600.0"
   },
   "devDependencies": {
     "@types/node": "^20.14.10",
-    "typescript": "^5.5.4"
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.0"
   }
 }
