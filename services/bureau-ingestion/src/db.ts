@@ -14,13 +14,16 @@ export interface ConsumerIdentity {
 }
 
 /** Loads what a bureau pull needs, decrypting the SA ID just-in-time. Never log the result. */
-export async function loadConsumerIdentity(pool: Pool, userId: string): Promise<ConsumerIdentity | null> {
+export async function loadConsumerIdentity(
+  pool: Pool,
+  userId: string,
+): Promise<ConsumerIdentity | null> {
   const row = await withUser(pool, userId, async (client) => {
     const r = await client.query(
       `SELECT u.first_name, u.last_name, u.sa_id_encrypted, u.is_verified, u.credit_check_consent,
               (SELECT max(created_at) FROM credisync.credit_profiles cp WHERE cp.user_id = u.id) AS last_refresh_at
        FROM credisync.users u WHERE u.id = $1 AND u.is_active`,
-      [userId]
+      [userId],
     );
     return r.rows[0];
   });
@@ -48,12 +51,12 @@ export async function persistUnifiedProfile(
   pool: Pool,
   userId: string,
   profile: UnifiedCreditProfile,
-  fetchedBureaus: BureauSource[]
+  fetchedBureaus: BureauSource[],
 ): Promise<string> {
   return withUser(pool, userId, async (client) => {
     await client.query(
       'UPDATE credisync.credit_profiles SET is_current = FALSE WHERE user_id = $1 AND is_current = TRUE',
-      [userId]
+      [userId],
     );
 
     const fetched = (b: BureauSource) => fetchedBureaus.includes(b);
@@ -98,7 +101,7 @@ export async function persistUnifiedProfile(
         profile.enquiriesLast12m,
         profile.totalCreditExposure,
         profile.monthlyInstalment,
-      ]
+      ],
     );
     const creditProfileId = inserted.rows[0]!.id;
 
@@ -106,7 +109,8 @@ export async function persistUnifiedProfile(
     for (const cluster of profile.resolvedClusters) {
       if (cluster.members.length > 1) merges += 1;
       const ordered = [...cluster.members].sort(
-        (a, b) => (BUREAU_PRIORITY[a.account.bureau] ?? 9) - (BUREAU_PRIORITY[b.account.bureau] ?? 9)
+        (a, b) =>
+          (BUREAU_PRIORITY[a.account.bureau] ?? 9) - (BUREAU_PRIORITY[b.account.bureau] ?? 9),
       );
       for (const [index, { account, confidence }] of ordered.entries()) {
         await client.query(
@@ -137,7 +141,7 @@ export async function persistUnifiedProfile(
             cluster.resolvedAccountId,
             index === 0,
             confidence,
-          ]
+          ],
         );
       }
     }
@@ -147,7 +151,11 @@ export async function persistUnifiedProfile(
       eventType: 'score_computed',
       resourceType: 'credit_profile',
       resourceId: creditProfileId,
-      payload: { unified_score: profile.unifiedScore, total_accounts: profile.totalAccounts, bureaus: fetchedBureaus },
+      payload: {
+        unified_score: profile.unifiedScore,
+        total_accounts: profile.totalAccounts,
+        bureaus: fetchedBureaus,
+      },
     });
     if (merges > 0) {
       await writeAudit(client, {
@@ -167,7 +175,7 @@ export async function logBureauPull(
   userId: string,
   bureau: string,
   success: boolean,
-  errorMessage?: string
+  errorMessage?: string,
 ): Promise<void> {
   await withUser(pool, userId, (client) =>
     writeAudit(client, {
@@ -177,7 +185,7 @@ export async function logBureauPull(
       success,
       errorMessage: errorMessage ?? null,
       payload: { bureau },
-    })
+    }),
   );
 }
 
@@ -186,7 +194,12 @@ export interface CreditProfileSummary {
   userId: string;
   unifiedScore: number | null;
   unifiedScoreBand: ScoreBand | null;
-  bureauScores: Array<{ bureau: BureauSource; score: number | null; scoreBand: ScoreBand | null; fetchedAt: string | null }>;
+  bureauScores: Array<{
+    bureau: BureauSource;
+    score: number | null;
+    scoreBand: ScoreBand | null;
+    fetchedAt: string | null;
+  }>;
   totalAccounts: number;
   openAccounts: number;
   adverseAccounts: number;
@@ -202,12 +215,23 @@ export interface CreditProfileSummary {
 
 const iso = (v: unknown) => (v ? new Date(v as string).toISOString() : null);
 
-export async function getCurrentProfile(pool: Pool, userId: string): Promise<CreditProfileSummary | null> {
+export async function getCurrentProfile(
+  pool: Pool,
+  userId: string,
+): Promise<CreditProfileSummary | null> {
   return withUser(pool, userId, async (client) => {
-    const r = await client.query('SELECT * FROM credisync.v_active_credit_profiles WHERE user_id = $1', [userId]);
+    const r = await client.query(
+      'SELECT * FROM credisync.v_active_credit_profiles WHERE user_id = $1',
+      [userId],
+    );
     const p = r.rows[0];
     if (!p) return null;
-    await writeAudit(client, { userId, eventType: 'data_access', resourceType: 'credit_profile', resourceId: p.id });
+    await writeAudit(client, {
+      userId,
+      eventType: 'data_access',
+      resourceType: 'credit_profile',
+      resourceId: p.id,
+    });
     return {
       id: p.id,
       userId: p.user_id,
@@ -245,17 +269,26 @@ export interface BureauAccountSummary {
   overdueAmount: number;
   monthsInArrears: number;
   /** Every bureau that reports this facility, with its own figures (dispute one of these). */
-  reportedBy: Array<{ accountId: string; bureau: BureauSource; status: AccountStatus; currentBalance: number; overdueAmount: number }>;
+  reportedBy: Array<{
+    accountId: string;
+    bureau: BureauSource;
+    status: AccountStatus;
+    currentBalance: number;
+    overdueAmount: number;
+  }>;
 }
 
-export async function getCurrentAccounts(pool: Pool, userId: string): Promise<BureauAccountSummary[]> {
+export async function getCurrentAccounts(
+  pool: Pool,
+  userId: string,
+): Promise<BureauAccountSummary[]> {
   return withUser(pool, userId, async (client) => {
     const r = await client.query(
       `SELECT ba.* FROM credisync.bureau_accounts ba
        JOIN credisync.credit_profiles cp ON cp.id = ba.credit_profile_id
        WHERE cp.user_id = $1 AND cp.is_current
        ORDER BY ba.resolved_account_id, ba.is_cluster_primary DESC`,
-      [userId]
+      [userId],
     );
     const clusters = new Map<string, BureauAccountSummary>();
     for (const row of r.rows) {
@@ -284,9 +317,18 @@ export async function getCurrentAccounts(pool: Pool, userId: string): Promise<Bu
         reportedBy: [member],
       });
     }
-    const severity: Record<string, number> = { current: 0, unknown: 1, arrears: 2, default: 3, written_off: 4, judgement: 5 };
+    const severity: Record<string, number> = {
+      current: 0,
+      unknown: 1,
+      arrears: 2,
+      default: 3,
+      written_off: 4,
+      judgement: 5,
+    };
     return [...clusters.values()].map((c) => {
-      const worst = [...c.reportedBy].sort((a, b) => (severity[b.status] ?? 0) - (severity[a.status] ?? 0))[0]!;
+      const worst = [...c.reportedBy].sort(
+        (a, b) => (severity[b.status] ?? 0) - (severity[a.status] ?? 0),
+      )[0]!;
       return { ...c, status: worst.status };
     });
   });

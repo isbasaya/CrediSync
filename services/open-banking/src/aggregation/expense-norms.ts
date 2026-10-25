@@ -28,12 +28,19 @@ export const DEFAULT_EXPENSE_NORMS: ExpenseNormBand[] = [
 ];
 
 export function loadExpenseNorms(env: NodeJS.ProcessEnv = process.env): ExpenseNormBand[] {
-  return env.NCA_EXPENSE_NORMS ? (JSON.parse(env.NCA_EXPENSE_NORMS) as ExpenseNormBand[]) : DEFAULT_EXPENSE_NORMS;
+  return env.NCA_EXPENSE_NORMS
+    ? (JSON.parse(env.NCA_EXPENSE_NORMS) as ExpenseNormBand[])
+    : DEFAULT_EXPENSE_NORMS;
 }
 
-export function minimumExpenseNorm(monthlyIncome: number, bands: ExpenseNormBand[] = DEFAULT_EXPENSE_NORMS): number {
+export function minimumExpenseNorm(
+  monthlyIncome: number,
+  bands: ExpenseNormBand[] = DEFAULT_EXPENSE_NORMS,
+): number {
   if (monthlyIncome <= 0) return bands[0]!.fixed;
-  const band = bands.find((b) => monthlyIncome >= b.min && (b.max === null || monthlyIncome <= b.max)) ?? bands[bands.length - 1]!;
+  const band =
+    bands.find((b) => monthlyIncome >= b.min && (b.max === null || monthlyIncome <= b.max)) ??
+    bands[bands.length - 1]!;
   const lower = band.min <= 0 ? 0 : Math.floor(band.min);
   return Number((band.fixed + Math.max(0, monthlyIncome - lower) * band.rate).toFixed(2));
 }

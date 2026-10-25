@@ -25,13 +25,20 @@ export function isLocalEnv(env: NodeJS.ProcessEnv = process.env): boolean {
   return LOCAL_ENVS.has(env.NODE_ENV ?? 'development');
 }
 
-export function requireSecret(name: string, options: SecretOptions, env: NodeJS.ProcessEnv = process.env): string {
+export function requireSecret(
+  name: string,
+  options: SecretOptions,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
   const value = env[name];
   const minLength = options.minLength ?? 32;
 
   if (value && value.length > 0) {
     if (!isLocalEnv(env) && value.length < minLength) {
-      throw new MissingSecretError(name, `must be at least ${minLength} characters outside development`);
+      throw new MissingSecretError(
+        name,
+        `must be at least ${minLength} characters outside development`,
+      );
     }
     if (!isLocalEnv(env) && (value === options.devFallback || /change[-_]?me/i.test(value))) {
       throw new MissingSecretError(name, 'is still set to a development placeholder');
@@ -45,7 +52,9 @@ export function requireSecret(name: string, options: SecretOptions, env: NodeJS.
 
   if (!warned.has(name)) {
     warned.add(name);
-    console.warn(`[config] ${name} not set — using development fallback (never valid outside development/test)`);
+    console.warn(
+      `[config] ${name} not set — using development fallback (never valid outside development/test)`,
+    );
   }
   return options.devFallback;
 }

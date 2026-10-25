@@ -485,12 +485,12 @@ abstract class AppTheme {
       ),
 
       // Cards
-      cardTheme: CardThemeData(
+      cardTheme: const CardThemeData(
         color:        _Primitives.white,
         elevation:    0,
         shape: RoundedRectangleBorder(
-          borderRadius: const BorderRadius.all(Radius.circular(16)),
-          side: BorderSide(color: const Color(0xFFE2E6EA)),
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+          side: BorderSide(color: Color(0xFFE2E6EA)),
         ),
         margin: EdgeInsets.zero,
       ),
@@ -563,16 +563,16 @@ abstract class AppTheme {
       ),
 
       // Chip (used for score band badges)
-      chipTheme: ChipThemeData(
-        backgroundColor:  const Color(0xFFEEF1F3),
-        labelStyle: const TextStyle(
+      chipTheme: const ChipThemeData(
+        backgroundColor:  Color(0xFFEEF1F3),
+        labelStyle: TextStyle(
           fontFamily: 'Inter',
           fontSize:   12,
           fontWeight: FontWeight.w500,
           color:      Color(0xFF3F4A57),
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        shape: const StadiumBorder(),
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        shape: StadiumBorder(),
       ),
 
       // Bottom navigation

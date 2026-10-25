@@ -1,4 +1,11 @@
-import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual } from 'crypto';
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHash,
+  createHmac,
+  randomBytes,
+  timingSafeEqual,
+} from 'crypto';
 import { requireSecret } from '@credisync/config';
 
 /**
@@ -34,14 +41,20 @@ export interface KeyProvider {
   decryptDataKey(encryptedKey: string): Promise<Buffer>;
 }
 
-const DEV_MASTER_KEY_HEX = createHash('sha256').update('credisync-dev-master-key-do-not-use').digest('hex');
+const DEV_MASTER_KEY_HEX = createHash('sha256')
+  .update('credisync-dev-master-key-do-not-use')
+  .digest('hex');
 
 export class LocalKeyProvider implements KeyProvider {
   readonly keyId = 'local';
   private readonly masterKey: Buffer;
 
   constructor(env: NodeJS.ProcessEnv = process.env) {
-    const hex = requireSecret('ENCRYPTION_MASTER_KEY', { devFallback: DEV_MASTER_KEY_HEX, minLength: 64 }, env);
+    const hex = requireSecret(
+      'ENCRYPTION_MASTER_KEY',
+      { devFallback: DEV_MASTER_KEY_HEX, minLength: 64 },
+      env,
+    );
     const key = Buffer.from(hex, 'hex');
     if (key.length !== KEY_LENGTH) {
       throw new Error('ENCRYPTION_MASTER_KEY must be 32 bytes encoded as 64 hex characters');
@@ -79,7 +92,7 @@ export class KmsKeyProvider implements KeyProvider {
 
   constructor(
     readonly keyId: string,
-    private readonly region: string = process.env.AWS_REGION ?? 'af-south-1'
+    private readonly region: string = process.env.AWS_REGION ?? 'af-south-1',
   ) {
     if (this.region !== 'af-south-1') {
       throw new Error(`KMS region must be af-south-1 (data residency); got ${this.region}`);
@@ -88,22 +101,34 @@ export class KmsKeyProvider implements KeyProvider {
 
   private async kms() {
     if (!this.clientPromise) {
-      this.clientPromise = import('@aws-sdk/client-kms').then((m) => ({ m, client: new m.KMSClient({ region: this.region }) }));
+      this.clientPromise = import('@aws-sdk/client-kms').then((m) => ({
+        m,
+        client: new m.KMSClient({ region: this.region }),
+      }));
     }
     return this.clientPromise;
   }
 
   async generateDataKey(): Promise<{ plaintextKey: Buffer; encryptedKey: string }> {
     const { m, client } = await this.kms();
-    const out = await client.send(new m.GenerateDataKeyCommand({ KeyId: this.keyId, KeySpec: 'AES_256' }));
-    if (!out.Plaintext || !out.CiphertextBlob) throw new Error('KMS GenerateDataKey returned no key material');
-    return { plaintextKey: Buffer.from(out.Plaintext), encryptedKey: Buffer.from(out.CiphertextBlob).toString('base64') };
+    const out = await client.send(
+      new m.GenerateDataKeyCommand({ KeyId: this.keyId, KeySpec: 'AES_256' }),
+    );
+    if (!out.Plaintext || !out.CiphertextBlob)
+      throw new Error('KMS GenerateDataKey returned no key material');
+    return {
+      plaintextKey: Buffer.from(out.Plaintext),
+      encryptedKey: Buffer.from(out.CiphertextBlob).toString('base64'),
+    };
   }
 
   async decryptDataKey(encryptedKey: string): Promise<Buffer> {
     const { m, client } = await this.kms();
     const out = await client.send(
-      new m.DecryptCommand({ KeyId: this.keyId, CiphertextBlob: Buffer.from(encryptedKey, 'base64') })
+      new m.DecryptCommand({
+        KeyId: this.keyId,
+        CiphertextBlob: Buffer.from(encryptedKey, 'base64'),
+      }),
     );
     if (!out.Plaintext) throw new Error('KMS Decrypt returned no plaintext');
     return Buffer.from(out.Plaintext);
@@ -151,7 +176,10 @@ export async function envelopeDecrypt(encrypted: EnvelopeEncrypted): Promise<str
   try {
     const decipher = createDecipheriv(ALGORITHM, plaintextKey, Buffer.from(encrypted.iv, 'base64'));
     decipher.setAuthTag(Buffer.from(encrypted.authTag, 'base64'));
-    const plaintext = Buffer.concat([decipher.update(Buffer.from(encrypted.ciphertext, 'base64')), decipher.final()]);
+    const plaintext = Buffer.concat([
+      decipher.update(Buffer.from(encrypted.ciphertext, 'base64')),
+      decipher.final(),
+    ]);
     return plaintext.toString('utf-8');
   } finally {
     plaintextKey.fill(0);

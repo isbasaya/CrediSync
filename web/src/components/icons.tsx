@@ -128,7 +128,12 @@ export const LogoMark = (props: IconProps) =>
   base(
     props,
     <>
-      <path d="M12 2 3 6.5v6c0 5.1 3.8 9.4 9 10.5 5.2-1.1 9-5.4 9-10.5v-6L12 2Z" fill="currentColor" stroke="none" opacity={0.14} />
+      <path
+        d="M12 2 3 6.5v6c0 5.1 3.8 9.4 9 10.5 5.2-1.1 9-5.4 9-10.5v-6L12 2Z"
+        fill="currentColor"
+        stroke="none"
+        opacity={0.14}
+      />
       <path d="M12 2 3 6.5v6c0 5.1 3.8 9.4 9 10.5 5.2-1.1 9-5.4 9-10.5v-6L12 2Z" />
       <path d="m8.2 12.2 2.6 2.6 5-5.2" />
     </>,

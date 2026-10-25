@@ -37,7 +37,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     void reload();
   }, [reload]);
 
-  return <SessionContext.Provider value={{ me, loading, reload, signOut }}>{children}</SessionContext.Provider>;
+  return (
+    <SessionContext.Provider value={{ me, loading, reload, signOut }}>
+      {children}
+    </SessionContext.Provider>
+  );
 }
 
 export function useSession(): SessionValue {
@@ -57,7 +61,11 @@ export function RequireSession({ children }: { children: ReactNode }) {
 
   if (loading || !me) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center" role="status" aria-live="polite">
+      <div
+        className="flex min-h-[60vh] items-center justify-center"
+        role="status"
+        aria-live="polite"
+      >
         <span className="sr-only">Loading your account</span>
         <span className="h-8 w-8 animate-spin rounded-full border-2 border-border-default border-t-teal-700" />
       </div>

@@ -7,6 +7,9 @@ class Dispute {
   final String status;
   final String createdAt;
   final String? resolutionDeadline;
+  final String? deadlineBreachedAt;
+  final String? creditorName;
+  final String? letterContent;
 
   Dispute({
     required this.id,
@@ -15,6 +18,9 @@ class Dispute {
     required this.status,
     required this.createdAt,
     this.resolutionDeadline,
+    this.deadlineBreachedAt,
+    this.creditorName,
+    this.letterContent,
   });
 
   factory Dispute.fromJson(Map<String, dynamic> json) {
@@ -25,6 +31,9 @@ class Dispute {
       status: json['status'] as String,
       createdAt: json['createdAt'] as String,
       resolutionDeadline: json['resolutionDeadline'] as String?,
+      deadlineBreachedAt: json['deadlineBreachedAt'] as String?,
+      creditorName: json['creditorName'] as String?,
+      letterContent: json['letterContent'] as String?,
     );
   }
 }
@@ -36,24 +45,21 @@ class DisputeService {
     return list.map((e) => Dispute.fromJson(e as Map<String, dynamic>)).toList();
   }
 
+  /// Creates a draft. The bureau is taken from the account record on the server.
   static Future<Dispute> createDispute({
     required String bureauAccountId,
-    required String bureau,
     required String reason,
     required String description,
-    required String maskedSaId,
   }) async {
     final response = await ApiClient.post('/disputes', body: {
       'bureauAccountId': bureauAccountId,
-      'bureau': bureau,
       'reason': reason,
       'description': description,
-      'maskedSaId': maskedSaId,
     });
     return Dispute.fromJson(response);
   }
 
-  static Future<void> submitDispute(String disputeId) async {
-    await ApiClient.post('/disputes/$disputeId/submit');
+  static Future<Dispute> submitDispute(String disputeId) async {
+    return Dispute.fromJson(await ApiClient.post('/disputes/$disputeId/submit'));
   }
 }

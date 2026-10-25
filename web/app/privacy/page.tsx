@@ -3,7 +3,13 @@
 import { useState } from 'react';
 import { AppHeader } from '@/components/AppHeader';
 import { Button, Checkbox, Notice, PageShell } from '@/components/ui';
-import { cancelDeletion, describeError, exportMyData, requestDeletion, updateConsents } from '@/lib/api-client';
+import {
+  cancelDeletion,
+  describeError,
+  exportMyData,
+  requestDeletion,
+  updateConsents,
+} from '@/lib/api-client';
 import { RequireSession, useSession } from '@/lib/session';
 
 type ConsentKey = 'creditCheck' | 'openBanking' | 'marketing' | 'thirdPartySharing';
@@ -12,15 +18,25 @@ const CONSENTS: Array<{ key: ConsentKey; label: string; detail: string }> = [
   {
     key: 'creditCheck',
     label: 'Request my credit reports',
-    detail: 'Lets CrediSync fetch your reports from TransUnion, Experian and XDS. Checking your own report doesn’t affect your score.',
+    detail:
+      'Lets CrediSync fetch your reports from TransUnion, Experian and XDS. Checking your own report doesn’t affect your score.',
   },
   {
     key: 'openBanking',
     label: 'Read my bank transactions',
-    detail: 'Used only to estimate affordability and bank readiness. Turning this off disconnects linked bank accounts.',
+    detail:
+      'Used only to estimate affordability and bank readiness. Turning this off disconnects linked bank accounts.',
   },
-  { key: 'marketing', label: 'Tips and product news', detail: 'Occasional emails. Never shared with lenders.' },
-  { key: 'thirdPartySharing', label: 'Share my profile with partner lenders', detail: 'Off unless you turn it on. You choose each time we ask.' },
+  {
+    key: 'marketing',
+    label: 'Tips and product news',
+    detail: 'Occasional emails. Never shared with lenders.',
+  },
+  {
+    key: 'thirdPartySharing',
+    label: 'Share my profile with partner lenders',
+    detail: 'Off unless you turn it on. You choose each time we ask.',
+  },
 ];
 
 function Privacy() {
@@ -37,7 +53,10 @@ function Privacy() {
       await reload();
       setMessage({ tone: 'success', text: 'Your permissions were updated.' });
     } catch (err) {
-      setMessage({ tone: 'error', text: describeError(err, 'We couldn’t update your permissions.') });
+      setMessage({
+        tone: 'error',
+        text: describeError(err, 'We couldn’t update your permissions.'),
+      });
     } finally {
       setBusyKey(null);
     }
@@ -48,7 +67,9 @@ function Privacy() {
     setMessage(null);
     try {
       const data = await exportMyData();
-      const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+      const url = URL.createObjectURL(
+        new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }),
+      );
       const a = document.createElement('a');
       a.href = url;
       a.download = 'credisync-personal-data.json';
@@ -62,7 +83,13 @@ function Privacy() {
   }
 
   async function deletion(schedule: boolean) {
-    if (schedule && !window.confirm('Delete your CrediSync account? You can cancel within 7 days; after that it can’t be undone.')) return;
+    if (
+      schedule &&
+      !window.confirm(
+        'Delete your CrediSync account? You can cancel within 7 days; after that it can’t be undone.',
+      )
+    )
+      return;
     setBusyKey('delete');
     setMessage(null);
     try {
@@ -77,10 +104,16 @@ function Privacy() {
   }
 
   return (
-    <PageShell title="Privacy and permissions" intro="You control what CrediSync does with your information, under the Protection of Personal Information Act.">
+    <PageShell
+      title="Privacy and permissions"
+      intro="You control what CrediSync does with your information, under the Protection of Personal Information Act."
+    >
       {message && <Notice tone={message.tone}>{message.text}</Notice>}
 
-      <section className="flex flex-col gap-4 rounded-2xl border border-border-default bg-bg-surface p-6" aria-labelledby="permissions">
+      <section
+        className="flex flex-col gap-4 rounded-2xl border border-border-default bg-bg-surface p-6"
+        aria-labelledby="permissions"
+      >
         <h2 id="permissions" className="text-sm font-semibold text-text-primary">
           Permissions
         </h2>
@@ -96,27 +129,43 @@ function Privacy() {
             {c.detail}
           </Checkbox>
         ))}
-        <p className="text-xs text-text-muted">Privacy notice accepted: version {me.consents.popiaPolicyVersion ?? '—'}.</p>
+        <p className="text-xs text-text-muted">
+          Privacy notice accepted: version {me.consents.popiaPolicyVersion ?? '—'}.
+        </p>
       </section>
 
-      <section className="flex flex-col items-start gap-3 rounded-2xl border border-border-default bg-bg-surface p-6" aria-labelledby="your-data">
+      <section
+        className="flex flex-col items-start gap-3 rounded-2xl border border-border-default bg-bg-surface p-6"
+        aria-labelledby="your-data"
+      >
         <h2 id="your-data" className="text-sm font-semibold text-text-primary">
           Your data
         </h2>
-        <p className="text-sm text-text-secondary">Download a copy of everything we hold about you, including your consent history.</p>
+        <p className="text-sm text-text-secondary">
+          Download a copy of everything we hold about you, including your consent history.
+        </p>
         <Button variant="secondary" busy={busyKey === 'export'} onClick={download}>
           Download my data
         </Button>
       </section>
 
-      <section className="flex flex-col items-start gap-3 rounded-2xl border border-border-default bg-bg-surface p-6" aria-labelledby="delete">
+      <section
+        className="flex flex-col items-start gap-3 rounded-2xl border border-border-default bg-bg-surface p-6"
+        aria-labelledby="delete"
+      >
         <h2 id="delete" className="text-sm font-semibold text-text-primary">
           Delete my account
         </h2>
         {me.deletionScheduledFor ? (
           <>
             <Notice>
-              Your account will be deleted on {new Date(me.deletionScheduledFor).toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' })}.
+              Your account will be deleted on{' '}
+              {new Date(me.deletionScheduledFor).toLocaleDateString('en-ZA', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric',
+              })}
+              .
             </Notice>
             <Button variant="secondary" busy={busyKey === 'delete'} onClick={() => deletion(false)}>
               Keep my account
@@ -125,8 +174,8 @@ function Privacy() {
         ) : (
           <>
             <p className="text-sm text-text-secondary">
-              We delete your profile, reports, bank data and uploaded documents after a 7-day grace period. A minimal, anonymised record of
-              the request is kept for compliance.
+              We delete your profile, reports, bank data and uploaded documents after a 7-day grace
+              period. A minimal, anonymised record of the request is kept for compliance.
             </p>
             <Button variant="danger" busy={busyKey === 'delete'} onClick={() => deletion(true)}>
               Delete my account

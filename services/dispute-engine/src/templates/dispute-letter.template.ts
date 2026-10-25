@@ -46,7 +46,12 @@ function formatCurrency(amount: number): string {
 }
 
 function formatDate(date: Date): string {
-  return date.toLocaleDateString('en-ZA', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Africa/Johannesburg' });
+  return date.toLocaleDateString('en-ZA', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'Africa/Johannesburg',
+  });
 }
 
 /** Keeps the consumer's free text from breaking the letter layout or smuggling control characters. */
@@ -83,8 +88,13 @@ export function generateDisputeLetter(input: DisputeLetterInput): string {
   const { consumer, account, bureau, reason, description } = input;
   const today = input.today ?? new Date();
   const contact = bureauContacts()[bureau];
-  const addressee = contact.verified && contact.disputeChannel ? `${contact.displayName}\n${contact.disputeChannel}` : contact.displayName;
-  const draftNotice = LEGAL_REVIEW.reviewed ? '' : '[DRAFT — statutory references pending legal review]\n\n';
+  const addressee =
+    contact.verified && contact.disputeChannel
+      ? `${contact.displayName}\n${contact.disputeChannel}`
+      : contact.displayName;
+  const draftNotice = LEGAL_REVIEW.reviewed
+    ? ''
+    : '[DRAFT — statutory references pending legal review]\n\n';
 
   return `${draftNotice}${formatDate(today)}
 

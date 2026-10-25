@@ -33,7 +33,9 @@ export function Card({
   className?: string;
 }) {
   return (
-    <div className={`rounded-2xl border border-border-default bg-bg-surface p-5 shadow-sm ${className}`}>
+    <div
+      className={`rounded-2xl border border-border-default bg-bg-surface p-5 shadow-sm ${className}`}
+    >
       {title && (
         <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-text-primary">
           {icon}
@@ -73,7 +75,13 @@ export function StatCard({
     <Card className="transition-colors duration-normal hover:border-teal-700">
       <div className="flex items-center justify-between">
         <div className="text-xs font-medium uppercase tracking-wide text-text-muted">{label}</div>
-        {icon && <span className={`flex h-7 w-7 items-center justify-center rounded-md ${iconTones[tone]}`}>{icon}</span>}
+        {icon && (
+          <span
+            className={`flex h-7 w-7 items-center justify-center rounded-md ${iconTones[tone]}`}
+          >
+            {icon}
+          </span>
+        )}
       </div>
       <div className={`mt-2 font-mono text-3xl font-bold tabular-nums ${tones[tone]}`}>{value}</div>
     </Card>
@@ -96,20 +104,33 @@ export function Badge({
   };
 
   return (
-    <span className={`inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold ${tones[tone]}`}>
+    <span
+      className={`inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold ${tones[tone]}`}
+    >
       {children}
     </span>
   );
 }
 
-export function Table({ columns, rows, loading }: { columns: string[]; rows: ReactNode[][]; loading?: boolean }) {
+export function Table({
+  columns,
+  rows,
+  loading,
+}: {
+  columns: string[];
+  rows: ReactNode[][];
+  loading?: boolean;
+}) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-border-subtle">
             {columns.map((col, i) => (
-              <th key={i} className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-text-muted">
+              <th
+                key={i}
+                className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-text-muted"
+              >
                 {col}
               </th>
             ))}
@@ -127,7 +148,10 @@ export function Table({ columns, rows, loading }: { columns: string[]; rows: Rea
                 </tr>
               ))
             : rows.map((row, i) => (
-                <tr key={i} className="border-b border-border-subtle transition-colors duration-fast hover:bg-bg-muted">
+                <tr
+                  key={i}
+                  className="border-b border-border-subtle transition-colors duration-fast hover:bg-bg-muted"
+                >
                   {row.map((cell, j) => (
                     <td key={j} className="px-4 py-3 text-text-primary">
                       {cell}
@@ -144,13 +168,25 @@ export function Table({ columns, rows, loading }: { columns: string[]; rows: Rea
 export function EmptyState({ icon, message }: { icon?: ReactNode; message: string }) {
   return (
     <div className="flex flex-col items-center gap-3 py-12 text-center">
-      {icon && <span className="flex h-10 w-10 items-center justify-center rounded-full bg-bg-muted text-text-muted">{icon}</span>}
+      {icon && (
+        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-bg-muted text-text-muted">
+          {icon}
+        </span>
+      )}
       <p className="text-sm text-text-muted">{message}</p>
     </div>
   );
 }
 
-export function Pagination({ page, totalPages, onPageChange }: { page: number; totalPages: number; onPageChange: (p: number) => void }) {
+export function Pagination({
+  page,
+  totalPages,
+  onPageChange,
+}: {
+  page: number;
+  totalPages: number;
+  onPageChange: (p: number) => void;
+}) {
   return (
     <div className="mt-4 flex items-center justify-between">
       <span className="text-xs text-text-muted">

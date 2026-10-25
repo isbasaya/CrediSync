@@ -1,5 +1,10 @@
 import { createHash } from 'crypto';
-import { accountTypeSimilarity, amountCloseness, creditorNameSimilarity, dateCloseness } from './similarity';
+import {
+  accountTypeSimilarity,
+  amountCloseness,
+  creditorNameSimilarity,
+  dateCloseness,
+} from './similarity';
 import type { NormalizedBureauAccount, ResolvedAccountCluster } from '../types';
 
 /**
@@ -44,7 +49,9 @@ export function pairScore(a: NormalizedBureauAccount, b: NormalizedBureauAccount
 
   const nameScore = creditorNameSimilarity(a.creditorName, b.creditorName);
   const limitScore =
-    a.creditLimit !== null && b.creditLimit !== null ? amountCloseness(a.creditLimit, b.creditLimit) : 0.5;
+    a.creditLimit !== null && b.creditLimit !== null
+      ? amountCloseness(a.creditLimit, b.creditLimit)
+      : 0.5;
   const balanceScore = amountCloseness(a.currentBalance, b.currentBalance);
   const dateScore = dateCloseness(a.openedDate, b.openedDate);
 
@@ -73,7 +80,9 @@ const STATUS_SEVERITY: Record<string, number> = {
  */
 function buildCanonical(members: NormalizedBureauAccount[]): NormalizedBureauAccount {
   const primary = members[0]!;
-  const worst = [...members].sort((a, b) => (STATUS_SEVERITY[b.status] ?? 0) - (STATUS_SEVERITY[a.status] ?? 0))[0]!;
+  const worst = [...members].sort(
+    (a, b) => (STATUS_SEVERITY[b.status] ?? 0) - (STATUS_SEVERITY[a.status] ?? 0),
+  )[0]!;
   const limits = members.map((m) => m.creditLimit).filter((l): l is number => l !== null);
 
   return {
@@ -102,7 +111,9 @@ function sortKey(a: NormalizedBureauAccount): string {
   return `${BUREAU_PRIORITY[a.bureau] ?? 9}|${a.accountReference}`;
 }
 
-export function resolveEntities(accountsByBureau: NormalizedBureauAccount[][]): ResolvedAccountCluster[] {
+export function resolveEntities(
+  accountsByBureau: NormalizedBureauAccount[][],
+): ResolvedAccountCluster[] {
   const accounts = accountsByBureau.flat().sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
   const clusters: NormalizedBureauAccount[][] = [];
 

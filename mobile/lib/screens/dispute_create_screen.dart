@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/dispute_service.dart';
 import '../services/api_client.dart';
+import '../services/credit_profile_service.dart';
 
 class DisputeCreateScreen extends StatefulWidget {
   const DisputeCreateScreen({super.key});
@@ -12,9 +13,31 @@ class DisputeCreateScreen extends StatefulWidget {
 class _DisputeCreateScreenState extends State<DisputeCreateScreen> {
   final _formKey = GlobalKey<FormState>();
   final _descriptionController = TextEditingController();
-  String _selectedBureau = 'transunion';
+  String? _selectedRecordId;
   String _selectedReason = 'not_my_account';
   bool _loading = false;
+  List<_RecordOption>? _options;
+  String? _loadError;
+
+  static const _bureauLabels = {'transunion': 'TransUnion', 'experian': 'Experian', 'xds': 'XDS'};
+
+  @override
+  void initState() {
+    super.initState();
+    CreditProfileService.getAccounts().then((accounts) {
+      if (!mounted) return;
+      setState(() {
+        _options = [
+          for (final a in accounts)
+            for (final r in a.reportedBy)
+              _RecordOption(r.accountId, '${a.creditorName} · ${_bureauLabels[r.bureau] ?? r.bureau} · ${r.status.replaceAll('_', ' ')}'),
+        ];
+        if (_options!.isNotEmpty) _selectedRecordId = _options!.first.accountId;
+      });
+    }).catchError((Object e) {
+      if (mounted) setState(() => _loadError = e is ApiError ? e.message : 'Could not load your accounts');
+    });
+  }
 
   final _reasons = const [
     'not_my_account',
@@ -39,19 +62,32 @@ class _DisputeCreateScreenState extends State<DisputeCreateScreen> {
 
     setState(() => _loading = true);
 
+    if (_selectedRecordId == null) return;
+
     try {
-      await DisputeService.createDispute(
-        bureauAccountId: 'pending-account-id',
-        bureau: _selectedBureau,
+      final draft = await DisputeService.createDispute(
+        bureauAccountId: _selectedRecordId!,
         reason: _selectedReason,
         description: _descriptionController.text.trim(),
-        maskedSaId: '********',
       );
+      if (!mounted) return;
+      final send = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Check your dispute letter'),
+          content: SingleChildScrollView(child: Text(draft.letterContent ?? '', style: const TextStyle(fontSize: 13))),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Keep as draft')),
+            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Send to bureau')),
+          ],
+        ),
+      );
+      if (send == true) await DisputeService.submitDispute(draft.id);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Dispute created successfully')),
+          SnackBar(content: Text(send == true ? 'Dispute sent. The bureau must respond within 20 business days.' : 'Saved as a draft')),
         );
-        Navigator.pop(context);
+        Navigator.pop(context, true);
       }
     } on ApiError catch (e) {
       if (mounted) {
@@ -85,25 +121,34 @@ class _DisputeCreateScreenState extends State<DisputeCreateScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text('Bureau', style: TextStyle(color: Color(0xFF12181F), fontSize: 14)),
+              const Text('Which bureau record is wrong?', style: TextStyle(color: Color(0xFF12181F), fontSize: 14)),
               const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                value: _selectedBureau,
-                dropdownColor: Colors.white,
-                decoration: _inputDecoration(),
-                items: const [
-                  DropdownMenuItem(value: 'transunion', child: Text('TransUnion', style: TextStyle(color: Color(0xFF12181F)))),
-                  DropdownMenuItem(value: 'experian', child: Text('Experian', style: TextStyle(color: Color(0xFF12181F)))),
-                  DropdownMenuItem(value: 'xds', child: Text('XDS', style: TextStyle(color: Color(0xFF12181F)))),
-                ],
-                onChanged: (v) => setState(() => _selectedBureau = v ?? 'transunion'),
-              ),
+              if (_loadError != null)
+                Text(_loadError!, style: const TextStyle(color: Color(0xFFB91C1C)))
+              else if (_options == null)
+                const LinearProgressIndicator(color: Color(0xFF0B7A70))
+              else if (_options!.isEmpty)
+                const Text('No accounts yet. Fetch your credit reports first.', style: TextStyle(color: Color(0xFF6B7684)))
+              else
+                DropdownButtonFormField<String>(
+                  initialValue: _selectedRecordId,
+                  isExpanded: true,
+                  dropdownColor: Colors.white,
+                  decoration: _inputDecoration(),
+                  items: _options!
+                      .map((o) => DropdownMenuItem(
+                            value: o.accountId,
+                            child: Text(o.label, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFF12181F))),
+                          ))
+                      .toList(),
+                  onChanged: (v) => setState(() => _selectedRecordId = v),
+                ),
               const SizedBox(height: 16),
 
               const Text('Reason', style: TextStyle(color: Color(0xFF12181F), fontSize: 14)),
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
-                value: _selectedReason,
+                initialValue: _selectedReason,
                 dropdownColor: Colors.white,
                 decoration: _inputDecoration(),
                 items: _reasons.map((r) => DropdownMenuItem(
@@ -128,7 +173,7 @@ class _DisputeCreateScreenState extends State<DisputeCreateScreen> {
               const SizedBox(height: 24),
 
               ElevatedButton(
-                onPressed: _loading ? null : _handleSubmit,
+                onPressed: _loading || _selectedRecordId == null ? null : _handleSubmit,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF0B7A70),
                   foregroundColor: Colors.white,
@@ -137,7 +182,7 @@ class _DisputeCreateScreenState extends State<DisputeCreateScreen> {
                 ),
                 child: _loading
                     ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : const Text('Submit Dispute', style: TextStyle(fontSize: 16)),
+                    : const Text('Preview letter', style: TextStyle(fontSize: 16)),
               ),
             ],
           ),
@@ -155,4 +200,10 @@ class _DisputeCreateScreenState extends State<DisputeCreateScreen> {
       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF0B7A70), width: 2)),
     );
   }
+}
+
+class _RecordOption {
+  final String accountId;
+  final String label;
+  const _RecordOption(this.accountId, this.label);
 }

@@ -18,7 +18,7 @@ export class ApiError extends Error {
   constructor(
     public readonly status: number,
     public readonly code: string,
-    message: string
+    message: string,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -27,22 +27,27 @@ export class ApiError extends Error {
 
 /** Plain-language messages for codes the user can act on. */
 const FRIENDLY: Record<string, string> = {
-  invalid_credentials: 'That email and password don’t match, or the account is temporarily locked. Try again in 15 minutes.',
+  invalid_credentials:
+    'That email and password don’t match, or the account is temporarily locked. Try again in 15 minutes.',
   account_exists: 'An account already exists for these details. Try signing in instead.',
   invalid_sa_id: 'That South African ID number isn’t valid. Check the 13 digits and try again.',
   email_not_verified: 'Confirm your email address first — we sent you a link when you signed up.',
-  credit_check_consent_required: 'Give CrediSync permission to request your credit reports first (Privacy settings).',
+  credit_check_consent_required:
+    'Give CrediSync permission to request your credit reports first (Privacy settings).',
   refresh_too_soon: 'Your reports were refreshed recently. You can refresh again in about an hour.',
-  open_banking_consent_required: 'Give permission to read your bank transactions first (Privacy settings).',
+  open_banking_consent_required:
+    'Give permission to read your bank transactions first (Privacy settings).',
   dispute_already_open: 'There’s already an open dispute for this account.',
-  deadline_not_passed: 'The bureau still has time to respond. You can escalate once the deadline passes.',
+  deadline_not_passed:
+    'The bureau still has time to respond. You can escalate once the deadline passes.',
   rate_limit_exceeded: 'Too many attempts. Please wait a minute and try again.',
   upstream_timeout: 'This is taking longer than usual. Please try again in a moment.',
   upstream_unavailable: 'We can’t reach this service right now. Please try again shortly.',
 };
 
 export function describeError(err: unknown, fallback: string): string {
-  if (err instanceof ApiError) return FRIENDLY[err.code] ?? (err.status >= 500 ? fallback : err.message || fallback);
+  if (err instanceof ApiError)
+    return FRIENDLY[err.code] ?? (err.status >= 500 ? fallback : err.message || fallback);
   return `${fallback} Check your connection and try again.`;
 }
 
@@ -86,11 +91,13 @@ async function request<T>(path: string, init: RequestInit = {}, retried = false)
   return (await response.json()) as T;
 }
 
-const post = <T>(path: string, body?: unknown) => request<T>(path, { method: 'POST', body: body === undefined ? undefined : JSON.stringify(body) });
+const post = <T>(path: string, body?: unknown) =>
+  request<T>(path, { method: 'POST', body: body === undefined ? undefined : JSON.stringify(body) });
 
 // --- Session ----------------------------------------------------------------
 export const getPolicy = () => request<{ popiaPolicyVersion: string }>('/auth/policy');
-export const login = (email: string, password: string) => post<{ user: Me }>('/auth/login', { email, password });
+export const login = (email: string, password: string) =>
+  post<{ user: Me }>('/auth/login', { email, password });
 export const logout = () => post<void>('/auth/logout');
 export const verifyEmail = (token: string) => post<{ user: Me }>('/auth/verify-email', { token });
 export interface SignupInput {
@@ -109,8 +116,11 @@ export const signup = (input: SignupInput) => post<{ user: Me }>('/auth/signup',
 
 // --- Account & privacy ------------------------------------------------------
 export const getMe = () => request<Me>('/me');
-export const updateConsents = (changes: Partial<Record<'creditCheck' | 'openBanking' | 'marketing' | 'thirdPartySharing', boolean>>) =>
-  request<Me>('/me/consents', { method: 'PATCH', body: JSON.stringify(changes) });
+export const updateConsents = (
+  changes: Partial<
+    Record<'creditCheck' | 'openBanking' | 'marketing' | 'thirdPartySharing', boolean>
+  >,
+) => request<Me>('/me/consents', { method: 'PATCH', body: JSON.stringify(changes) });
 export const exportMyData = () => request<Record<string, unknown>>('/me/export');
 export const requestDeletion = () => post<{ scheduledFor: string }>('/me/deletion-request');
 export const cancelDeletion = () => request<void>('/me/deletion-request', { method: 'DELETE' });
@@ -119,12 +129,19 @@ export const cancelDeletion = () => request<void>('/me/deletion-request', { meth
 export const getCreditProfile = () => request<CreditProfileSummary>('/credit-profile');
 export const getBureauAccounts = () => request<BureauAccountSummary[]>('/credit-profile/accounts');
 export const refreshCreditProfile = () => post<RefreshResponse>('/credit-profile/refresh');
-export const scoreBankReadiness = () => post<{ score: number; tier: string; top_reasons: string[] }>('/bank-readiness/score');
+export const scoreBankReadiness = () =>
+  post<{ score: number; tier: string; top_reasons: string[] }>('/bank-readiness/score');
 
 // --- Disputes ---------------------------------------------------------------
 export const listDisputes = () => request<{ disputes: Dispute[] }>('/disputes');
 export const getDispute = (id: string) => request<Dispute>(`/disputes/${encodeURIComponent(id)}`);
-export const createDispute = (input: { bureauAccountId: string; reason: DisputeReason; description: string; evidenceKeys?: string[] }) =>
-  post<Dispute>('/disputes', input);
-export const regenerateLetter = (id: string, description: string) => post<Dispute>(`/disputes/${encodeURIComponent(id)}/regenerate-letter`, { description });
-export const submitDispute = (id: string) => post<Dispute>(`/disputes/${encodeURIComponent(id)}/submit`);
+export const createDispute = (input: {
+  bureauAccountId: string;
+  reason: DisputeReason;
+  description: string;
+  evidenceKeys?: string[];
+}) => post<Dispute>('/disputes', input);
+export const regenerateLetter = (id: string, description: string) =>
+  post<Dispute>(`/disputes/${encodeURIComponent(id)}/regenerate-letter`, { description });
+export const submitDispute = (id: string) =>
+  post<Dispute>(`/disputes/${encodeURIComponent(id)}/submit`);

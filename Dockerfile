@@ -1,18 +1,32 @@
-FROM node:20-alpine AS base
-WORKDIR /app
-COPY package.json package-lock.json* ./
-RUN npm ci
+# syntax=docker/dockerfile:1
+#
+# One image recipe for every Node workspace. Pick the workspace with TARGET:
+#   docker build --build-arg TARGET=services/auth -t credisync/auth .
+#   docker build --build-arg TARGET=packages/jobs -t credisync/jobs .
+# The runtime command is set per service (see docker-compose.yml).
+#
+# Debian slim (not Alpine) so native modules such as bcrypt use prebuilt glibc binaries.
 
-FROM base AS builder
+ARG NODE_VERSION=20.18-bookworm-slim
+
+FROM node:${NODE_VERSION} AS build
+ARG TARGET=services/api-gateway
+WORKDIR /app
 COPY . .
-RUN npm run build
+RUN npm ci --no-audit --no-fund \
+ && npm run build:packages \
+ && if [ -d "${TARGET}/src" ] && [ "${TARGET#packages/}" = "${TARGET}" ]; then npm run build -w "${TARGET}"; fi \
+ && npm prune --omit=dev --no-audit --no-fund
 
-FROM node:20-alpine AS runner
+FROM node:${NODE_VERSION} AS runtime
+ARG TARGET=services/api-gateway
+ENV NODE_ENV=production \
+    TARGET=${TARGET}
 WORKDIR /app
-ENV NODE_ENV=production
-COPY --from=builder /app/package.json ./
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/services/api-gateway/dist ./services/api-gateway/dist
-COPY --from=builder /app/services/api-gateway/package.json ./services/api-gateway/
-EXPOSE 4000
-CMD ["node", "services/api-gateway/dist/index.js"]
+COPY --from=build --chown=node:node /app/package.json ./package.json
+COPY --from=build --chown=node:node /app/node_modules ./node_modules
+COPY --from=build --chown=node:node /app/packages ./packages
+COPY --from=build --chown=node:node /app/db ./db
+COPY --from=build --chown=node:node /app/${TARGET} ./${TARGET}
+USER node
+CMD ["sh", "-c", "node ${TARGET}/dist/index.js"]

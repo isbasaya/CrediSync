@@ -4,7 +4,12 @@ import { minimumExpenseNorm } from '../aggregation/expense-norms';
 import { buildFinancialHealthSnapshot, periodMonths } from '../aggregation/snapshot-builder';
 import type { NormalizedAccountFeed, NormalizedTransaction } from '../types';
 
-function tx(amount: number, description: string, date = '2026-08-25', merchant: string | null = null): NormalizedTransaction {
+function tx(
+  amount: number,
+  description: string,
+  date = '2026-08-25',
+  merchant: string | null = null,
+): NormalizedTransaction {
   return {
     providerTransactionId: `${date}-${description}`,
     transactionDate: date,
@@ -51,7 +56,11 @@ describe('minimumExpenseNorm (NCA affordability regulations table)', () => {
 });
 
 describe('buildFinancialHealthSnapshot', () => {
-  const feed = (transactions: NormalizedTransaction[], start = '2026-06-01', end = '2026-08-31'): NormalizedAccountFeed => ({
+  const feed = (
+    transactions: NormalizedTransaction[],
+    start = '2026-06-01',
+    end = '2026-08-31',
+  ): NormalizedAccountFeed => ({
     source: 'stitch',
     accountId: 'acc',
     periodStart: start,
@@ -71,7 +80,7 @@ describe('buildFinancialHealthSnapshot', () => {
         tx(30000, 'SALARY ACME', '2026-07-25'),
         tx(30000, 'SALARY ACME', '2026-08-25'),
         tx(-9000, 'RENTAL PAYMENT', '2026-07-01'),
-      ])
+      ]),
     );
     expect(periodMonths('2026-06-01', '2026-08-31')).toBe(3);
     expect(periodMonths('2026-06-10', '2026-07-24')).toBeCloseTo(1.48, 2);
@@ -80,11 +89,16 @@ describe('buildFinancialHealthSnapshot', () => {
   });
 
   it('keeps unclassified credits out of income and uses the expense norm when observed spend is lower', () => {
-    const snapshot = buildFinancialHealthSnapshot('u', feed([tx(20000, 'SALARY X'), tx(15000, 'CASH DEPOSIT')], '2026-08-01', '2026-08-31'));
+    const snapshot = buildFinancialHealthSnapshot(
+      'u',
+      feed([tx(20000, 'SALARY X'), tx(15000, 'CASH DEPOSIT')], '2026-08-01', '2026-08-31'),
+    );
     expect(snapshot.netIncome).toBe(20000);
     expect(snapshot.unclassifiedCredits).toBe(15000);
     expect(snapshot.minimumExpenseNorm).toBeGreaterThan(0);
-    expect(snapshot.affordabilitySurplus).toBe(Number((20000 - snapshot.minimumExpenseNorm!).toFixed(2)));
+    expect(snapshot.affordabilitySurplus).toBe(
+      Number((20000 - snapshot.minimumExpenseNorm!).toFixed(2)),
+    );
     expect(snapshot.overdraftDays30d).toBe(1);
   });
 });

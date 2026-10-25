@@ -11,7 +11,10 @@ import { useSession } from '@/lib/session';
 function VerifyEmail() {
   const params = useSearchParams();
   const { reload } = useSession();
-  const [state, setState] = useState<{ tone: 'info' | 'success' | 'error'; message: string }>({ tone: 'info', message: 'Confirming your email address…' });
+  const [state, setState] = useState<{ tone: 'info' | 'success' | 'error'; message: string }>({
+    tone: 'info',
+    message: 'Confirming your email address…',
+  });
   const started = useRef(false);
 
   useEffect(() => {
@@ -19,16 +22,25 @@ function VerifyEmail() {
     started.current = true;
     const token = params.get('token');
     if (!token) {
-      setState({ tone: 'error', message: 'This link is incomplete. Open the link from your email again.' });
+      setState({
+        tone: 'error',
+        message: 'This link is incomplete. Open the link from your email again.',
+      });
       return;
     }
     verifyEmail(token)
       .then(async () => {
         await reload();
-        setState({ tone: 'success', message: 'Your email address is confirmed. You can now fetch your credit reports.' });
+        setState({
+          tone: 'success',
+          message: 'Your email address is confirmed. You can now fetch your credit reports.',
+        });
       })
       .catch((err) =>
-        setState({ tone: 'error', message: describeError(err, 'This link has expired or was already used.') })
+        setState({
+          tone: 'error',
+          message: describeError(err, 'This link has expired or was already used.'),
+        }),
       );
   }, [params, reload]);
 

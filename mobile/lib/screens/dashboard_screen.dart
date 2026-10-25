@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/credit_profile_service.dart';
 import '../services/auth_service.dart';
+import '../services/api_client.dart';
 import '../theme/app_theme.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -23,14 +24,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _loadProfile() async {
     try {
-      final profile = await CreditProfileService.getProfile('demo-user-id');
+      final profile = await CreditProfileService.getProfile();
+      if (!mounted) return;
       setState(() {
         _profile = profile;
+        _error = profile == null ? 'No reports yet. Pull down to fetch your credit reports from all three bureaus.' : null;
         _loading = false;
       });
-    } catch (e) {
+    } on ApiError catch (e) {
+      if (!mounted) return;
       setState(() {
-        _error = 'Could not load profile';
+        _error = e.message;
         _loading = false;
       });
     }
@@ -39,15 +43,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _refresh() async {
     setState(() => _loading = true);
     try {
-      final profile = await CreditProfileService.refreshProfile('demo-user-id');
+      final profile = await CreditProfileService.refreshProfile();
+      if (!mounted) return;
       setState(() {
         _profile = profile;
         _loading = false;
         _error = null;
       });
-    } catch (e) {
+    } on ApiError catch (e) {
+      if (!mounted) return;
       setState(() {
-        _error = 'Refresh failed';
+        _error = e.message;
         _loading = false;
       });
     }
@@ -64,8 +70,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
+              final navigator = Navigator.of(context);
               await AuthService.logout();
-              if (mounted) Navigator.pushReplacementNamed(context, '/login');
+              navigator.pushReplacementNamed('/login');
             },
           ),
         ],
@@ -73,7 +80,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: Color(0xFF0B7A70)))
           : _error != null
-              ? Center(child: Text(_error!, style: const TextStyle(color: Color(0xFF6B7684))))
+              ? RefreshIndicator(
+                  color: const Color(0xFF0B7A70),
+                  onRefresh: _refresh,
+                  child: ListView(
+                    padding: const EdgeInsets.all(32),
+                    children: [Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFF6B7684)))],
+                  ),
+                )
               : RefreshIndicator(
                   color: const Color(0xFF0B7A70),
                   onRefresh: _refresh,
@@ -211,7 +225,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           if (score != null)
             Text(
-              '$score/100',
+              '${score.toStringAsFixed(0)}/100',
               style: const TextStyle(
                 color: Color(0xFF0B7A70),
                 fontSize: 18,

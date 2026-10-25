@@ -29,7 +29,12 @@ export interface PresignedUpload {
 }
 
 export interface StorageProvider {
-  presignUpload(key: string, contentType: string, contentLength: number, expiresIn: number): Promise<PresignedUpload>;
+  presignUpload(
+    key: string,
+    contentType: string,
+    contentLength: number,
+    expiresIn: number,
+  ): Promise<PresignedUpload>;
   presignDownload(key: string, expiresIn: number): Promise<string>;
   deleteObject(key: string): Promise<void>;
   deletePrefix(prefix: string): Promise<number>;
@@ -39,11 +44,22 @@ export class LocalStorageProvider implements StorageProvider {
   private readonly baseUrl = process.env.STORAGE_BASE_URL ?? 'http://localhost:9000';
 
   constructor() {
-    if (!isLocalEnv()) throw new Error('LocalStorageProvider is only available in development and test');
+    if (!isLocalEnv())
+      throw new Error('LocalStorageProvider is only available in development and test');
   }
 
-  async presignUpload(key: string, contentType: string, _contentLength: number, expiresIn: number): Promise<PresignedUpload> {
-    return { uploadUrl: `${this.baseUrl}/upload/${key}`, key, expiresIn, requiredHeaders: { 'Content-Type': contentType } };
+  async presignUpload(
+    key: string,
+    contentType: string,
+    _contentLength: number,
+    expiresIn: number,
+  ): Promise<PresignedUpload> {
+    return {
+      uploadUrl: `${this.baseUrl}/upload/${key}`,
+      key,
+      expiresIn,
+      requiredHeaders: { 'Content-Type': contentType },
+    };
   }
 
   async presignDownload(key: string, expiresIn: number): Promise<string> {
@@ -65,17 +81,26 @@ export class S3StorageProvider implements StorageProvider {
   constructor(
     private readonly bucket: string,
     private readonly kmsKeyId: string,
-    private readonly region: string = process.env.AWS_REGION ?? 'af-south-1'
+    private readonly region: string = process.env.AWS_REGION ?? 'af-south-1',
   ) {
-    if (region !== 'af-south-1') throw new Error(`S3 region must be af-south-1 (data residency); got ${region}`);
+    if (region !== 'af-south-1')
+      throw new Error(`S3 region must be af-south-1 (data residency); got ${region}`);
   }
 
   private async sdk() {
-    const [s3, presigner] = await Promise.all([import('@aws-sdk/client-s3'), import('@aws-sdk/s3-request-presigner')]);
+    const [s3, presigner] = await Promise.all([
+      import('@aws-sdk/client-s3'),
+      import('@aws-sdk/s3-request-presigner'),
+    ]);
     return { s3, presigner, client: new s3.S3Client({ region: this.region }) };
   }
 
-  async presignUpload(key: string, contentType: string, contentLength: number, expiresIn: number): Promise<PresignedUpload> {
+  async presignUpload(
+    key: string,
+    contentType: string,
+    contentLength: number,
+    expiresIn: number,
+  ): Promise<PresignedUpload> {
     const { s3, presigner, client } = await this.sdk();
     const command = new s3.PutObjectCommand({
       Bucket: this.bucket,
@@ -100,7 +125,11 @@ export class S3StorageProvider implements StorageProvider {
 
   async presignDownload(key: string, expiresIn: number): Promise<string> {
     const { s3, presigner, client } = await this.sdk();
-    return presigner.getSignedUrl(client, new s3.GetObjectCommand({ Bucket: this.bucket, Key: key }), { expiresIn });
+    return presigner.getSignedUrl(
+      client,
+      new s3.GetObjectCommand({ Bucket: this.bucket, Key: key }),
+      { expiresIn },
+    );
   }
 
   async deleteObject(key: string): Promise<void> {
@@ -113,10 +142,18 @@ export class S3StorageProvider implements StorageProvider {
     let deleted = 0;
     let token: string | undefined;
     do {
-      const page = await client.send(new s3.ListObjectsV2Command({ Bucket: this.bucket, Prefix: prefix, ContinuationToken: token }));
+      const page = await client.send(
+        new s3.ListObjectsV2Command({
+          Bucket: this.bucket,
+          Prefix: prefix,
+          ContinuationToken: token,
+        }),
+      );
       const keys = (page.Contents ?? []).map((o) => ({ Key: o.Key! }));
       if (keys.length > 0) {
-        await client.send(new s3.DeleteObjectsCommand({ Bucket: this.bucket, Delete: { Objects: keys } }));
+        await client.send(
+          new s3.DeleteObjectsCommand({ Bucket: this.bucket, Delete: { Objects: keys } }),
+        );
         deleted += keys.length;
       }
       token = page.IsTruncated ? page.NextContinuationToken : undefined;
@@ -131,7 +168,8 @@ function current(): StorageProvider {
   if (!provider) {
     const bucket = process.env.EVIDENCE_BUCKET;
     const kmsKeyId = process.env.KMS_KEY_ID;
-    provider = bucket && kmsKeyId ? new S3StorageProvider(bucket, kmsKeyId) : new LocalStorageProvider();
+    provider =
+      bucket && kmsKeyId ? new S3StorageProvider(bucket, kmsKeyId) : new LocalStorageProvider();
   }
   return provider;
 }
@@ -152,10 +190,18 @@ export function userPrefix(userId: string): string {
 }
 
 /** Presigned upload for one evidence file. The key is generated here, never chosen by the client. */
-export async function createEvidenceUpload(userId: string, contentType: string, contentLength: number): Promise<PresignedUpload> {
+export async function createEvidenceUpload(
+  userId: string,
+  contentType: string,
+  contentLength: number,
+): Promise<PresignedUpload> {
   const ext = ALLOWED_EVIDENCE_TYPES[contentType];
   if (!ext) throw new EvidenceValidationError('Upload a PDF, JPEG or PNG file');
-  if (!Number.isInteger(contentLength) || contentLength <= 0 || contentLength > MAX_EVIDENCE_BYTES) {
+  if (
+    !Number.isInteger(contentLength) ||
+    contentLength <= 0 ||
+    contentLength > MAX_EVIDENCE_BYTES
+  ) {
     throw new EvidenceValidationError('Files must be smaller than 10 MB');
   }
   const key = `${userPrefix(userId)}${randomUUID()}.${ext}`;

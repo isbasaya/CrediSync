@@ -99,7 +99,7 @@ export function southAfricanDate(instant: Date): Date {
 export function addBusinessDays(
   startDate: Date,
   businessDays: number,
-  extraHolidays: ReadonlySet<string> = new Set()
+  extraHolidays: ReadonlySet<string> = new Set(),
 ): Date {
   let current = new Date(startDate.getTime());
   let remaining = businessDays;
@@ -121,6 +121,11 @@ export const STATUTORY_RESPONSE_BUSINESS_DAYS = 20;
  * `extraHolidays` holds one-off holidays declared under the Public Holidays
  * Act (table public_holiday_overrides), as YYYY-MM-DD keys.
  */
-export function computeResolutionDeadline(submittedAt: Date, extraHolidays: ReadonlySet<string> = new Set()): string {
-  return toDateKey(addBusinessDays(southAfricanDate(submittedAt), STATUTORY_RESPONSE_BUSINESS_DAYS, extraHolidays));
+export function computeResolutionDeadline(
+  submittedAt: Date,
+  extraHolidays: ReadonlySet<string> = new Set(),
+): string {
+  return toDateKey(
+    addBusinessDays(southAfricanDate(submittedAt), STATUTORY_RESPONSE_BUSINESS_DAYS, extraHolidays),
+  );
 }

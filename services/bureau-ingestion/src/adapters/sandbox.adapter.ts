@@ -1,7 +1,12 @@
 import { createHash } from 'crypto';
 import { isLocalEnv } from '@credisync/config';
 import type { BureauAdapter } from './bureau-adapter.interface';
-import type { BureauFetchRequest, BureauSource, NormalizedBureauAccount, NormalizedBureauReport } from '../types';
+import type {
+  BureauFetchRequest,
+  BureauSource,
+  NormalizedBureauAccount,
+  NormalizedBureauReport,
+} from '../types';
 
 /**
  * SYNTHETIC bureau data for local development and demos only. Produces a
@@ -21,7 +26,8 @@ export class SandboxBureauAdapter implements BureauAdapter {
     const n = (i: number, mod: number) => seed[i]! % mod;
     const drift = 1 + (n(1, 5) - 2) / 100; // ±2% reporting drift between bureaus
 
-    const ref = (suffix: string) => `SBX-${this.bureau.slice(0, 2).toUpperCase()}-${seed.subarray(2, 5).toString('hex')}-${suffix}`;
+    const ref = (suffix: string) =>
+      `SBX-${this.bureau.slice(0, 2).toUpperCase()}-${seed.subarray(2, 5).toString('hex')}-${suffix}`;
     const accounts: NormalizedBureauAccount[] = [
       {
         bureau: this.bureau,

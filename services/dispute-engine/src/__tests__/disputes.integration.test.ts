@@ -1,7 +1,12 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import { randomUUID } from 'crypto';
-import { createTestDatabase, testDatabaseAvailable, withSystem, type TestDatabase } from '@credisync/db';
+import {
+  createTestDatabase,
+  testDatabaseAvailable,
+  withSystem,
+  type TestDatabase,
+} from '@credisync/db';
 import { encryptToBytes, hmacLookup } from '@credisync/crypto';
 import { internalHeaders } from '@credisync/middleware';
 import { createApp } from '../app';
@@ -24,18 +29,18 @@ async function seed(db: TestDatabase) {
         `INSERT INTO credisync.users (id, email, mobile_number, first_name, last_name, sa_id_encrypted, sa_id_hash,
            popia_consent_granted, popia_consent_date, popia_policy_version, credit_check_consent, is_verified, role)
          VALUES ($1,$2,'+27820000000','Test','User',$3,$4,TRUE,NOW(),'test',TRUE,TRUE,$5)`,
-        [id, email, await encryptToBytes(saId), hmacLookup(saId), role]
+        [id, email, await encryptToBytes(saId), hmacLookup(saId), role],
       );
     }
     const profile = await c.query<{ id: string }>(
       'INSERT INTO credisync.credit_profiles (user_id) VALUES ($1) RETURNING id',
-      [ALICE]
+      [ALICE],
     );
     const account = await c.query<{ id: string }>(
       `INSERT INTO credisync.bureau_accounts (credit_profile_id, user_id, bureau, account_reference, creditor_name, account_type,
          status, current_balance, overdue_amount, resolved_account_id, is_cluster_primary)
        VALUES ($1, $2, 'experian', 'EX-RT-1', 'Edcon Retail', 'retail', 'default', 6420, 6420, $3, TRUE) RETURNING id`,
-      [profile.rows[0]!.id, ALICE, randomUUID()]
+      [profile.rows[0]!.id, ALICE, randomUUID()],
     );
     aliceAccount = account.rows[0]!.id;
   });
@@ -60,18 +65,20 @@ describe.skipIf(!testDatabaseAvailable)('dispute engine (real Postgres)', () => 
   });
 
   it("will not open a dispute on someone else's account", async () => {
-    const res = await request(app)
-      .post('/disputes')
-      .set(as(MALLORY))
-      .send({ bureauAccountId: accountId, reason: 'not_my_account', description: 'Trying to read another user account details.' });
+    const res = await request(app).post('/disputes').set(as(MALLORY)).send({
+      bureauAccountId: accountId,
+      reason: 'not_my_account',
+      description: 'Trying to read another user account details.',
+    });
     expect(res.status).toBe(404);
   });
 
   it('creates a draft with the bureau taken from the account, and a masked ID in the letter', async () => {
-    const res = await request(app)
-      .post('/disputes')
-      .set(as(ALICE))
-      .send({ bureauAccountId: accountId, reason: 'settled_in_full_not_updated', description: 'I settled this account in full in March 2024.' });
+    const res = await request(app).post('/disputes').set(as(ALICE)).send({
+      bureauAccountId: accountId,
+      reason: 'settled_in_full_not_updated',
+      description: 'I settled this account in full in March 2024.',
+    });
     expect(res.status).toBe(201);
     expect(res.body.bureau).toBe('experian');
     expect(res.body.status).toBe('draft');
@@ -95,7 +102,9 @@ describe.skipIf(!testDatabaseAvailable)('dispute engine (real Postgres)', () => 
 
   it("hides one user's disputes from another", async () => {
     expect((await request(app).get(`/disputes/${disputeId}`).set(as(MALLORY))).status).toBe(404);
-    expect((await request(app).post(`/disputes/${disputeId}/submit`).set(as(MALLORY))).status).toBe(404);
+    expect((await request(app).post(`/disputes/${disputeId}/submit`).set(as(MALLORY))).status).toBe(
+      404,
+    );
     expect((await request(app).get('/disputes').set(as(MALLORY))).body.disputes).toEqual([]);
   });
 
@@ -111,7 +120,10 @@ describe.skipIf(!testDatabaseAvailable)('dispute engine (real Postgres)', () => 
   });
 
   it('does not let the consumer escalate before the bureau deadline has passed', async () => {
-    const res = await request(app).post(`/disputes/${disputeId}/escalate`).set(as(ALICE)).send({ caseNumber: 'CO-1' });
+    const res = await request(app)
+      .post(`/disputes/${disputeId}/escalate`)
+      .set(as(ALICE))
+      .send({ caseNumber: 'CO-1' });
     expect(res.status).toBe(409);
     expect(res.body.error).toBe('deadline_not_passed');
   });
@@ -132,10 +144,20 @@ describe.skipIf(!testDatabaseAvailable)('dispute engine (real Postgres)', () => 
   });
 
   it('accepts only signed webhooks from the right bureau, idempotently', async () => {
-    const event = { eventId: 'evt_0001_abcdef', disputeId, bureau: 'experian', response: 'Record corrected', reference: 'EXP-9', resolution: 'upheld' };
+    const event = {
+      eventId: 'evt_0001_abcdef',
+      disputeId,
+      bureau: 'experian',
+      response: 'Record corrected',
+      reference: 'EXP-9',
+      resolution: 'upheld',
+    };
     const body = JSON.stringify(event);
 
-    const unsigned = await request(app).post('/webhooks/bureau-response').set('Content-Type', 'application/json').send(body);
+    const unsigned = await request(app)
+      .post('/webhooks/bureau-response')
+      .set('Content-Type', 'application/json')
+      .send(body);
     expect(unsigned.status).toBe(401);
 
     const wrongBureau = JSON.stringify({ ...event, bureau: 'xds' });

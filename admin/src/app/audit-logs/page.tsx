@@ -93,7 +93,11 @@ function AuditLogsPageInner() {
             </div>
 
             {loading ? (
-              <Table columns={['Event', 'Resource', 'User', 'Success', 'Timestamp']} rows={[]} loading />
+              <Table
+                columns={['Event', 'Resource', 'User', 'Success', 'Timestamp']}
+                rows={[]}
+                loading
+              />
             ) : data && data.logs.length > 0 ? (
               <>
                 <Table

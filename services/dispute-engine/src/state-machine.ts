@@ -35,7 +35,9 @@ export function assertValidTransition(from: DisputeStatus, to: DisputeStatus): v
 
 /** Every status from which `to` may be reached; used for atomic compare-and-set updates. */
 export function statusesLeadingTo(to: DisputeStatus): DisputeStatus[] {
-  return (Object.keys(ALLOWED_TRANSITIONS) as DisputeStatus[]).filter((from) => ALLOWED_TRANSITIONS[from].includes(to));
+  return (Object.keys(ALLOWED_TRANSITIONS) as DisputeStatus[]).filter((from) =>
+    ALLOWED_TRANSITIONS[from].includes(to),
+  );
 }
 
 export function isTerminalStatus(status: DisputeStatus): boolean {

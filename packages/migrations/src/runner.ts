@@ -34,7 +34,10 @@ export function listMigrations(dir = MIGRATIONS_DIR): string[] {
 export function splitMigration(sql: string): { up: string; down: string | null } {
   const index = sql.indexOf(ROLLBACK_MARKER);
   if (index === -1) return { up: sql, down: null };
-  return { up: sql.slice(0, index), down: sql.slice(index + ROLLBACK_MARKER.length).trim() || null };
+  return {
+    up: sql.slice(0, index),
+    down: sql.slice(index + ROLLBACK_MARKER.length).trim() || null,
+  };
 }
 
 async function ensureTable(client: Client): Promise<void> {
@@ -62,7 +65,11 @@ async function withLock<T>(fn: (client: Client) => Promise<T>): Promise<T> {
 
 export async function migrateUp(): Promise<string[]> {
   return withLock(async (client) => {
-    const applied = new Set((await client.query<{ name: string }>('SELECT name FROM credisync.schema_migrations')).rows.map((r) => r.name));
+    const applied = new Set(
+      (
+        await client.query<{ name: string }>('SELECT name FROM credisync.schema_migrations')
+      ).rows.map((r) => r.name),
+    );
     const ran: string[] = [];
     for (const file of listMigrations()) {
       if (applied.has(file)) continue;
@@ -87,11 +94,16 @@ export async function migrateUp(): Promise<string[]> {
 /** Rolls back the most recent migration, only if it declares an explicit @rollback section. */
 export async function migrateDown(): Promise<string | null> {
   return withLock(async (client) => {
-    const last = await client.query<{ name: string }>('SELECT name FROM credisync.schema_migrations ORDER BY id DESC LIMIT 1');
+    const last = await client.query<{ name: string }>(
+      'SELECT name FROM credisync.schema_migrations ORDER BY id DESC LIMIT 1',
+    );
     const file = last.rows[0]?.name;
     if (!file) return null;
     const { down } = splitMigration(readFileSync(join(MIGRATIONS_DIR, file), 'utf-8'));
-    if (!down) throw new Error(`${file} has no ${ROLLBACK_MARKER} section; write a new forward migration instead`);
+    if (!down)
+      throw new Error(
+        `${file} has no ${ROLLBACK_MARKER} section; write a new forward migration instead`,
+      );
     await client.query('BEGIN');
     try {
       await client.query(down);

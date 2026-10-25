@@ -11,13 +11,15 @@
     "e2e"
   ],
   "scripts": {
-    "build": "npm run build --workspaces",
-    "typecheck": "npm run typecheck --workspaces --if-present",
-    "lint": "eslint . --ext .ts,.tsx",
-    "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
-    "format:check": "prettier --check \"**/*.{ts,tsx,json,md}\"",
-    "test": "npm run test --workspaces --if-present",
-    "test:coverage": "vitest run --coverage"
+    "build:packages": "npm run build -w @credisync/config && npm run build -w @credisync/types && npm run build -w @credisync/crypto && npm run build -w @credisync/db && npm run build -w @credisync/notifications && npm run build -w @credisync/storage && npm run build -w @credisync/middleware && npm run build -w @credisync/jobs && npm run build -w @credisync/migrations",
+    "build": "npm run build:packages && npm run build -w services/auth -w services/bureau-ingestion -w services/dispute-engine -w services/open-banking -w services/api-gateway -w web -w admin",
+    "typecheck": "npm run build:packages && npm run typecheck --workspaces --if-present",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "npm run build:packages && npm run test --workspaces --if-present",
+    "db:migrate": "npm run migrate -w @credisync/migrations",
+    "jobs": "npm run jobs -w @credisync/jobs --"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
@@ -29,5 +31,8 @@
     "typescript": "^5.5.4",
     "typescript-eslint": "^8.0.0",
     "vitest": "^2.0.0"
+  },
+  "engines": {
+    "node": ">=20.11"
   }
 }

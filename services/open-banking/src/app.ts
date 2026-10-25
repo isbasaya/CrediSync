@@ -15,7 +15,10 @@ import { INGESTION_SOURCES } from '@credisync/types';
 import { StitchAdapter } from './adapters/stitch.adapter';
 import { OzowAdapter } from './adapters/ozow.adapter';
 import { SandboxOpenBankingAdapter } from './adapters/sandbox.adapter';
-import { OpenBankingFetchError, type OpenBankingAdapter } from './adapters/open-banking-adapter.interface';
+import {
+  OpenBankingFetchError,
+  type OpenBankingAdapter,
+} from './adapters/open-banking-adapter.interface';
 import { buildFinancialHealthSnapshot } from './aggregation/snapshot-builder';
 import { loadExpenseNorms } from './aggregation/expense-norms';
 import * as db from './db';
@@ -25,28 +28,46 @@ const logger = pino({ name: 'open-banking' });
 
 const MAX_PERIOD_DAYS = 186;
 
-export function createAdapters(env: NodeJS.ProcessEnv = process.env): Record<IngestionSource, OpenBankingAdapter> {
+export function createAdapters(
+  env: NodeJS.ProcessEnv = process.env,
+): Record<IngestionSource, OpenBankingAdapter> {
   if (env.OPEN_BANKING_MODE === 'sandbox') {
-    return { stitch: new SandboxOpenBankingAdapter('stitch'), ozow: new SandboxOpenBankingAdapter('ozow') };
+    return {
+      stitch: new SandboxOpenBankingAdapter('stitch'),
+      ozow: new SandboxOpenBankingAdapter('ozow'),
+    };
   }
   return { stitch: new StitchAdapter(), ozow: new OzowAdapter() };
 }
 
-const linkSchema = z.object({ source: z.enum(INGESTION_SOURCES), accountLinkToken: z.string().min(8).max(4096) });
+const linkSchema = z.object({
+  source: z.enum(INGESTION_SOURCES),
+  accountLinkToken: z.string().min(8).max(4096),
+});
 const ingestSchema = z
-  .object({ linkId: z.string().uuid(), periodStart: z.string().date(), periodEnd: z.string().date() })
+  .object({
+    linkId: z.string().uuid(),
+    periodStart: z.string().date(),
+    periodEnd: z.string().date(),
+  })
   .refine((v) => v.periodEnd >= v.periodStart, 'periodEnd must be on or after periodStart')
   .refine(
     (v) => (Date.parse(v.periodEnd) - Date.parse(v.periodStart)) / 86_400_000 <= MAX_PERIOD_DAYS,
-    `period must be at most ${MAX_PERIOD_DAYS} days`
+    `period must be at most ${MAX_PERIOD_DAYS} days`,
   )
-  .refine((v) => v.periodEnd <= new Date().toISOString().slice(0, 10), 'periodEnd cannot be in the future');
+  .refine(
+    (v) => v.periodEnd <= new Date().toISOString().slice(0, 10),
+    'periodEnd cannot be in the future',
+  );
 
 function invalid(res: Response, err: z.ZodError) {
   return res.status(400).json({ error: 'invalid_request', details: err.flatten() });
 }
 
-export function createApp(pool: Pool, adapters: Record<IngestionSource, OpenBankingAdapter> = createAdapters()) {
+export function createApp(
+  pool: Pool,
+  adapters: Record<IngestionSource, OpenBankingAdapter> = createAdapters(),
+) {
   const app = express();
   configureTrustProxy(app);
   app.disable('x-powered-by');
@@ -55,18 +76,37 @@ export function createApp(pool: Pool, adapters: Record<IngestionSource, OpenBank
 
   app.get('/healthz', (_req, res) => res.status(200).json({ status: 'ok' }));
 
-  app.use(requireInternalToken, requireActingUser, standardRateLimiter, express.json({ limit: '16kb' }));
+  app.use(
+    requireInternalToken,
+    requireActingUser,
+    standardRateLimiter,
+    express.json({ limit: '16kb' }),
+  );
 
   app.post(
     '/links',
     asyncHandler(async (req, res) => {
       const parsed = linkSchema.safeParse(req.body);
       if (!parsed.success) return invalid(res, parsed.error);
-      return res.status(201).json(await db.createLink(pool, req.actingUserId!, parsed.data.source, parsed.data.accountLinkToken));
-    })
+      return res
+        .status(201)
+        .json(
+          await db.createLink(
+            pool,
+            req.actingUserId!,
+            parsed.data.source,
+            parsed.data.accountLinkToken,
+          ),
+        );
+    }),
   );
 
-  app.get('/links', asyncHandler(async (req, res) => res.json({ links: await db.listLinks(pool, req.actingUserId!) })));
+  app.get(
+    '/links',
+    asyncHandler(async (req, res) =>
+      res.json({ links: await db.listLinks(pool, req.actingUserId!) }),
+    ),
+  );
 
   app.delete(
     '/links/:id',
@@ -75,7 +115,7 @@ export function createApp(pool: Pool, adapters: Record<IngestionSource, OpenBank
       if (!id.success) return res.status(404).json({ error: 'not_found' });
       await db.revokeLink(pool, req.actingUserId!, id.data);
       return res.status(204).send();
-    })
+    }),
   );
 
   app.post(
@@ -87,7 +127,12 @@ export function createApp(pool: Pool, adapters: Record<IngestionSource, OpenBank
       const { linkId, periodStart, periodEnd } = parsed.data;
 
       const link = await db.loadLinkToken(pool, userId, linkId);
-      const feed = await adapters[link.source].fetchTransactions({ userId, accountLinkToken: link.token, periodStart, periodEnd });
+      const feed = await adapters[link.source].fetchTransactions({
+        userId,
+        accountLinkToken: link.token,
+        periodStart,
+        periodEnd,
+      });
       const snapshot = buildFinancialHealthSnapshot(userId, feed, loadExpenseNorms());
       const { snapshotId, inserted } = await db.persistSnapshot(pool, snapshot);
 
@@ -99,7 +144,7 @@ export function createApp(pool: Pool, adapters: Record<IngestionSource, OpenBank
         debtToIncomeRatio: snapshot.debtToIncomeRatio,
         transactionsStored: inserted,
       });
-    })
+    }),
   );
 
   app.get(
@@ -108,15 +153,18 @@ export function createApp(pool: Pool, adapters: Record<IngestionSource, OpenBank
       const snap = await db.latestSnapshot(pool, req.actingUserId!);
       if (!snap) return res.status(404).json({ error: 'no_snapshot' });
       return res.json(snap);
-    })
+    }),
   );
 
-   
   app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
-    if (err instanceof db.OpenBankingError) return res.status(err.status).json({ error: err.code, message: err.message });
+    if (err instanceof db.OpenBankingError)
+      return res.status(err.status).json({ error: err.code, message: err.message });
     if (err instanceof OpenBankingFetchError) {
       const status = err.cause === 'consent_revoked' ? 409 : 502;
-      return res.status(status).json({ error: `provider_${err.cause}`, message: 'Your bank connection could not be read. Try again or relink.' });
+      return res.status(status).json({
+        error: `provider_${err.cause}`,
+        message: 'Your bank connection could not be read. Try again or relink.',
+      });
     }
     logger.error({ err, traceId: req.traceId }, 'unhandled error in open-banking service');
     return res.status(500).json({ error: 'internal_error', traceId: req.traceId });

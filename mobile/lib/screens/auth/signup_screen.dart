@@ -16,7 +16,20 @@ class _SignupScreenState extends State<SignupScreen> {
   final _firstNameController = TextEditingController();
   final _lastNameController = TextEditingController();
   final _mobileController = TextEditingController();
+  final _saIdController = TextEditingController();
   bool _popiaConsent = false;
+  bool _creditCheckConsent = true;
+  String? _policyVersion;
+
+  @override
+  void initState() {
+    super.initState();
+    AuthService.currentPolicyVersion().then((v) {
+      if (mounted) setState(() => _policyVersion = v);
+    }).catchError((_) {
+      if (mounted) setState(() => _error = 'Could not load the privacy notice. Check your connection.');
+    });
+  }
   bool _loading = false;
   String? _error;
 
@@ -27,13 +40,14 @@ class _SignupScreenState extends State<SignupScreen> {
     _firstNameController.dispose();
     _lastNameController.dispose();
     _mobileController.dispose();
+    _saIdController.dispose();
     super.dispose();
   }
 
   Future<void> _handleSignup() async {
     if (!_formKey.currentState!.validate()) return;
-    if (!_popiaConsent) {
-      setState(() => _error = 'You must consent to POPIA to create an account');
+    if (!_popiaConsent || _policyVersion == null) {
+      setState(() => _error = 'You need to accept the privacy notice to create an account');
       return;
     }
 
@@ -48,9 +62,10 @@ class _SignupScreenState extends State<SignupScreen> {
         password: _passwordController.text,
         firstName: _firstNameController.text.trim(),
         lastName: _lastNameController.text.trim(),
-        mobileNumber: _mobileController.text.trim(),
-        saIdHash: 'pending-hash',
-        popiaConsent: _popiaConsent,
+        mobileNumber: _mobileController.text.replaceAll(' ', ''),
+        saIdNumber: _saIdController.text.replaceAll(' ', ''),
+        popiaPolicyVersion: _policyVersion!,
+        creditCheckConsent: _creditCheckConsent,
       );
       if (mounted) {
         Navigator.pushReplacementNamed(context, '/app');
@@ -144,7 +159,7 @@ class _SignupScreenState extends State<SignupScreen> {
                   decoration: _inputDecoration('Mobile (+27...)'),
                   validator: (v) {
                     if (v == null || v.isEmpty) return 'Required';
-                    if (!v.startsWith('+27') || v.length != 12) return 'Must be +27 followed by 9 digits';
+                    if (!RegExp(r'^\+27\d{9}$').hasMatch(v.replaceAll(' ', ''))) return 'Use +27 followed by 9 digits';
                     return null;
                   },
                 ),
@@ -156,9 +171,20 @@ class _SignupScreenState extends State<SignupScreen> {
                   decoration: _inputDecoration('Password'),
                   validator: (v) {
                     if (v == null || v.isEmpty) return 'Required';
-                    if (v.length < 8) return 'Must be at least 8 characters';
+                    if (v.length < 10) return 'Use at least 10 characters';
                     return null;
                   },
+                ),
+                const SizedBox(height: 16),
+
+                TextFormField(
+                  controller: _saIdController,
+                  keyboardType: TextInputType.number,
+                  decoration: _inputDecoration('South African ID number').copyWith(
+                    helperText: 'Used by the bureaus to find your records. Stored encrypted.',
+                    helperMaxLines: 2,
+                  ),
+                  validator: (v) => isValidSaIdNumber(v ?? '') ? null : 'Check your 13-digit ID number',
                 ),
                 const SizedBox(height: 16),
 
@@ -166,9 +192,20 @@ class _SignupScreenState extends State<SignupScreen> {
                   value: _popiaConsent,
                   onChanged: (v) => setState(() => _popiaConsent = v ?? false),
                   activeColor: const Color(0xFF0B7A70),
+                  title: Text(
+                    'I accept the CrediSync privacy notice (version ${_policyVersion ?? '…'}), required under POPIA',
+                    style: const TextStyle(color: Color(0xFF6B7684), fontSize: 13),
+                  ),
+                  controlAffinity: ListTileControlAffinity.leading,
+                  contentPadding: EdgeInsets.zero,
+                ),
+                CheckboxListTile(
+                  value: _creditCheckConsent,
+                  onChanged: (v) => setState(() => _creditCheckConsent = v ?? false),
+                  activeColor: const Color(0xFF0B7A70),
                   title: const Text(
-                    'I consent to the processing of my personal information in accordance with POPIA',
-                    style: TextStyle(color: Color(0xFF6B7684), fontSize: 12),
+                    'Request my credit reports from TransUnion, Experian and XDS. Checking your own report does not affect your score.',
+                    style: TextStyle(color: Color(0xFF6B7684), fontSize: 13),
                   ),
                   controlAffinity: ListTileControlAffinity.leading,
                   contentPadding: EdgeInsets.zero,

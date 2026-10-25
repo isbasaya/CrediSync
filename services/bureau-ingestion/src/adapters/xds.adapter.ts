@@ -59,7 +59,7 @@ export class XdsAdapter implements BureauAdapter {
 
   constructor(
     private readonly baseUrl: string = process.env.XDS_API_BASE_URL ?? '',
-    private readonly apiKey: string = process.env.XDS_API_KEY ?? ''
+    private readonly apiKey: string = process.env.XDS_API_KEY ?? '',
   ) {}
 
   async fetchReport(request: BureauFetchRequest): Promise<NormalizedBureauReport> {
@@ -93,7 +93,12 @@ export class XdsAdapter implements BureauAdapter {
       throw new BureauFetchError('xds', 'rate_limited', 'XDS API rate limit hit', true);
     }
     if (!response.ok) {
-      throw new BureauFetchError('xds', 'upstream_error', `HTTP ${response.status}`, response.status >= 500);
+      throw new BureauFetchError(
+        'xds',
+        'upstream_error',
+        `HTTP ${response.status}`,
+        response.status >= 500,
+      );
     }
 
     const raw = (await response.json()) as XdsRawResponse;

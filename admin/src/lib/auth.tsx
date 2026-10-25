@@ -60,7 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       setUser(me);
     },
-    [loadMe]
+    [loadMe],
   );
 
   const logout = useCallback(async () => {
@@ -68,7 +68,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
-  return <AuthContext.Provider value={{ user, login, logout, loading }}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={{ user, login, logout, loading }}>{children}</AuthContext.Provider>
+  );
 }
 
 export function useAuth(): AuthContextType {

@@ -10,10 +10,7 @@ export interface HealthCheckResult {
   };
 }
 
-export async function healthCheck(
-  pool: Pool | null,
-  res: Response
-): Promise<void> {
+export async function healthCheck(pool: Pool | null, res: Response): Promise<void> {
   const result: HealthCheckResult = {
     status: 'ok',
     timestamp: new Date().toISOString(),

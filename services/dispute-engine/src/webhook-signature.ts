@@ -16,10 +16,18 @@ export const SIGNATURE_HEADER = 'x-credisync-signature';
 export const TOLERANCE_SECONDS = 300;
 
 export function webhookSecret(bureau: BureauSource, env: NodeJS.ProcessEnv = process.env): string {
-  return requireSecret(`BUREAU_WEBHOOK_SECRET_${bureau.toUpperCase()}`, { devFallback: `dev-webhook-secret-${bureau}-local-only-xxxxxxxx` }, env);
+  return requireSecret(
+    `BUREAU_WEBHOOK_SECRET_${bureau.toUpperCase()}`,
+    { devFallback: `dev-webhook-secret-${bureau}-local-only-xxxxxxxx` },
+    env,
+  );
 }
 
-export function signWebhook(secret: string, rawBody: string, timestamp = Math.floor(Date.now() / 1000)): string {
+export function signWebhook(
+  secret: string,
+  rawBody: string,
+  timestamp = Math.floor(Date.now() / 1000),
+): string {
   const mac = createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');
   return `t=${timestamp},v1=${mac}`;
 }
@@ -28,14 +36,14 @@ export function verifyWebhookSignature(
   header: string | undefined,
   rawBody: string,
   secret: string,
-  now = Math.floor(Date.now() / 1000)
+  now = Math.floor(Date.now() / 1000),
 ): boolean {
   if (!header) return false;
   const parts = Object.fromEntries(
     header.split(',').map((p) => {
       const [k, ...v] = p.trim().split('=');
       return [k, v.join('=')];
-    })
+    }),
   );
   const t = Number(parts.t);
   const v1 = parts.v1;

@@ -4,7 +4,16 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
-import { GavelIcon, HomeIcon, InboxIcon, LogoMark, LogoutIcon, MenuIcon, UsersIcon, XIcon } from './icons';
+import {
+  GavelIcon,
+  HomeIcon,
+  InboxIcon,
+  LogoMark,
+  LogoutIcon,
+  MenuIcon,
+  UsersIcon,
+  XIcon,
+} from './icons';
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: HomeIcon },
@@ -36,7 +45,9 @@ function SidebarContent({ pathname, onNavigate }: { pathname: string; onNavigate
               href={item.href}
               onClick={onNavigate}
               className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-fast ${
-                active ? 'bg-teal-050 text-teal-800' : 'text-text-secondary hover:bg-bg-muted hover:text-text-primary'
+                active
+                  ? 'bg-teal-050 text-teal-800'
+                  : 'text-text-secondary hover:bg-bg-muted hover:text-text-primary'
               }`}
             >
               <Icon className={`h-4 w-4 shrink-0 ${active ? 'text-teal-700' : ''}`} />

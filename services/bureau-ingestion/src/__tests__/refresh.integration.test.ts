@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
-import { createTestDatabase, testDatabaseAvailable, withSystem, type TestDatabase } from '@credisync/db';
+import {
+  createTestDatabase,
+  testDatabaseAvailable,
+  withSystem,
+  type TestDatabase,
+} from '@credisync/db';
 import { encryptToBytes, hmacLookup } from '@credisync/crypto';
 import { internalHeaders } from '@credisync/middleware';
 import { createApp } from '../app';
@@ -9,13 +14,24 @@ import { SandboxBureauAdapter } from '../adapters/sandbox.adapter';
 const ALICE = '11111111-1111-4111-8111-111111111111';
 const BOB = '22222222-2222-4222-8222-222222222222';
 
-async function seedUser(db: TestDatabase, id: string, opts: { verified: boolean; consent: boolean; saId: string; email: string }) {
+async function seedUser(
+  db: TestDatabase,
+  id: string,
+  opts: { verified: boolean; consent: boolean; saId: string; email: string },
+) {
   await withSystem(db.pool, async (c) => {
     await c.query(
       `INSERT INTO credisync.users (id, email, mobile_number, first_name, last_name, sa_id_encrypted, sa_id_hash,
          popia_consent_granted, popia_consent_date, popia_policy_version, credit_check_consent, is_verified)
        VALUES ($1,$2,'+27820000000','Test','User',$3,$4,TRUE,NOW(),'test',$5,$6)`,
-      [id, opts.email, await encryptToBytes(opts.saId), hmacLookup(opts.saId), opts.consent, opts.verified]
+      [
+        id,
+        opts.email,
+        await encryptToBytes(opts.saId),
+        hmacLookup(opts.saId),
+        opts.consent,
+        opts.verified,
+      ],
     );
   });
 }
@@ -27,9 +43,22 @@ describe.skipIf(!testDatabaseAvailable)('bureau refresh (real Postgres, sandbox 
 
   beforeAll(async () => {
     db = await createTestDatabase();
-    app = createApp(db.pool, (['transunion', 'experian', 'xds'] as const).map((b) => new SandboxBureauAdapter(b)));
-    await seedUser(db, ALICE, { verified: true, consent: true, saId: '8001015009087', email: 'alice@example.co.za' });
-    await seedUser(db, BOB, { verified: true, consent: false, saId: '9202204720083', email: 'bob@example.co.za' });
+    app = createApp(
+      db.pool,
+      (['transunion', 'experian', 'xds'] as const).map((b) => new SandboxBureauAdapter(b)),
+    );
+    await seedUser(db, ALICE, {
+      verified: true,
+      consent: true,
+      saId: '8001015009087',
+      email: 'alice@example.co.za',
+    });
+    await seedUser(db, BOB, {
+      verified: true,
+      consent: false,
+      saId: '9202204720083',
+      email: 'bob@example.co.za',
+    });
   }, 60_000);
 
   afterAll(async () => {
@@ -75,7 +104,7 @@ describe.skipIf(!testDatabaseAvailable)('bureau refresh (real Postgres, sandbox 
   it('records bureau pulls in the audit log', async () => {
     const r = await db.adminPool.query(
       "SELECT count(*)::int AS n FROM credisync.regulatory_audit_logs WHERE user_id = $1 AND event_type = 'bureau_pull'",
-      [ALICE]
+      [ALICE],
     );
     expect(r.rows[0].n).toBe(3);
   });

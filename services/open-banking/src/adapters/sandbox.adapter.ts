@@ -9,7 +9,8 @@ import type { IngestionSource, NormalizedAccountFeed, NormalizedTransaction } fr
  */
 export class SandboxOpenBankingAdapter implements OpenBankingAdapter {
   constructor(readonly source: IngestionSource) {
-    if (!isLocalEnv()) throw new Error('SandboxOpenBankingAdapter is only available in development and test');
+    if (!isLocalEnv())
+      throw new Error('SandboxOpenBankingAdapter is only available in development and test');
   }
 
   async fetchTransactions(request: OpenBankingFetchRequest): Promise<NormalizedAccountFeed> {
@@ -22,7 +23,13 @@ export class SandboxOpenBankingAdapter implements OpenBankingAdapter {
     for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
       const date = d.toISOString().slice(0, 10);
       const day = d.getUTCDate();
-      const push = (id: string, amount: number, description: string, merchant: string | null = null, recurring = false) => {
+      const push = (
+        id: string,
+        amount: number,
+        description: string,
+        merchant: string | null = null,
+        recurring = false,
+      ) => {
         transactions.push({
           providerTransactionId: `sbx-${date}-${id}`,
           transactionDate: date,

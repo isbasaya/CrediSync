@@ -28,7 +28,12 @@ function account(overrides: Partial<NormalizedBureauAccount>): NormalizedBureauA
 
 describe('resolveEntities', () => {
   const tu = account({ bureau: 'transunion', accountReference: 'TU-1' });
-  const ex = account({ bureau: 'experian', accountReference: 'EX-1', creditorName: 'ABSA Bank Ltd', currentBalance: 815000 });
+  const ex = account({
+    bureau: 'experian',
+    accountReference: 'EX-1',
+    creditorName: 'ABSA Bank Ltd',
+    currentBalance: 815000,
+  });
 
   it('merges the same facility reported by two bureaus and keeps each bureau record unmodified', () => {
     const clusters = resolveEntities([[tu], [ex]]);
@@ -39,7 +44,13 @@ describe('resolveEntities', () => {
   });
 
   it('never merges different product types from the same creditor', () => {
-    const card = account({ bureau: 'experian', accountReference: 'EX-2', accountType: 'credit_card', creditLimit: null, openedDate: null });
+    const card = account({
+      bureau: 'experian',
+      accountReference: 'EX-2',
+      accountType: 'credit_card',
+      creditLimit: null,
+      openedDate: null,
+    });
     const clusters = resolveEntities([[tu], [card]]);
     expect(clusters).toHaveLength(2);
   });
@@ -64,7 +75,11 @@ describe('resolveEntities', () => {
 });
 
 describe('buildUnifiedProfile', () => {
-  const report = (bureau: NormalizedBureauReport['bureau'], score: number | null, accounts: NormalizedBureauAccount[]) => ({
+  const report = (
+    bureau: NormalizedBureauReport['bureau'],
+    score: number | null,
+    accounts: NormalizedBureauAccount[],
+  ) => ({
     bureau,
     fetchedAt: new Date().toISOString(),
     score,
@@ -75,13 +90,18 @@ describe('buildUnifiedProfile', () => {
   });
 
   it('does not count unknown statuses as adverse', () => {
-    const profile = buildUnifiedProfile([report('transunion', 650, [account({ status: 'unknown' })])]);
+    const profile = buildUnifiedProfile([
+      report('transunion', 650, [account({ status: 'unknown' })]),
+    ]);
     expect(profile.adverseAccounts).toBe(0);
   });
 
   it('normalises scores to a common scale before averaging', () => {
     const ranges = { transunion: [0, 999], experian: [300, 850], xds: [0, 999] } as const;
-    const profile = buildUnifiedProfile([report('transunion', 999, []), report('experian', 850, [])], ranges);
+    const profile = buildUnifiedProfile(
+      [report('transunion', 999, []), report('experian', 850, [])],
+      ranges,
+    );
     expect(profile.unifiedScore).toBe(999);
     expect(profile.experianScore).toBe(850); // stored as reported
   });
@@ -100,7 +120,9 @@ describe('score normalisation', () => {
   });
 
   it('validates BUREAU_SCORE_RANGES', () => {
-    expect(() => loadScoreRanges({ BUREAU_SCORE_RANGES: '{"xds":[500,100]}' })).toThrow(/max > min/);
+    expect(() => loadScoreRanges({ BUREAU_SCORE_RANGES: '{"xds":[500,100]}' })).toThrow(
+      /max > min/,
+    );
     expect(loadScoreRanges({ BUREAU_SCORE_RANGES: '{"xds":[0,700]}' }).xds).toEqual([0, 700]);
   });
 });

@@ -56,13 +56,20 @@ export default function DashboardPage() {
           {loading ? (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
               {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="h-24 animate-pulse rounded-2xl border border-border-default bg-bg-muted" />
+                <div
+                  key={i}
+                  className="h-24 animate-pulse rounded-2xl border border-border-default bg-bg-muted"
+                />
               ))}
             </div>
           ) : (
             <>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <StatCard label="Total Users" value={stats?.totalUsers ?? 0} icon={<UsersIcon className="h-4 w-4" />} />
+                <StatCard
+                  label="Total Users"
+                  value={stats?.totalUsers ?? 0}
+                  icon={<UsersIcon className="h-4 w-4" />}
+                />
                 <StatCard
                   label="Active Users"
                   value={stats?.activeUsers ?? 0}
@@ -75,7 +82,11 @@ export default function DashboardPage() {
                   tone="warning"
                   icon={<GavelIcon className="h-4 w-4" />}
                 />
-                <StatCard label="Avg Credit Score" value={stats?.averageScore ?? '—'} icon={<PulseIcon className="h-4 w-4" />} />
+                <StatCard
+                  label="Avg Credit Score"
+                  value={stats?.averageScore ?? '—'}
+                  icon={<PulseIcon className="h-4 w-4" />}
+                />
               </div>
 
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -86,7 +97,9 @@ export default function DashboardPage() {
                     )}
                     {Object.entries(stats?.serviceHealth ?? {}).map(([name, status]) => (
                       <div key={name} className="flex items-center justify-between py-1">
-                        <span className="text-sm capitalize text-text-secondary">{name.replace(/_/g, ' ')}</span>
+                        <span className="text-sm capitalize text-text-secondary">
+                          {name.replace(/_/g, ' ')}
+                        </span>
                         <span
                           className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
                             (healthTone[status] ?? 'negative') === 'positive'
@@ -103,10 +116,17 @@ export default function DashboardPage() {
                   </div>
                 </Card>
 
-                <Card title="Recent Activity" icon={<InboxIcon className="h-4 w-4 text-text-muted" />}>
+                <Card
+                  title="Recent Activity"
+                  icon={<InboxIcon className="h-4 w-4 text-text-muted" />}
+                >
                   <div className="space-y-2 text-sm text-text-muted">
                     <p>Resolved disputes (30d): {stats?.resolvedDisputes30d ?? 0}</p>
-                    <p className={stats?.overdueDisputes ? 'font-semibold text-status-fair-fg' : undefined}>
+                    <p
+                      className={
+                        stats?.overdueDisputes ? 'font-semibold text-status-fair-fg' : undefined
+                      }
+                    >
                       Disputes past the bureau deadline: {stats?.overdueDisputes ?? 0}
                     </p>
                     <p>Credit profiles: {stats?.totalCreditProfiles ?? 0}</p>

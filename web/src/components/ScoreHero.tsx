@@ -28,7 +28,14 @@ export interface ScoreHeroProps {
  * unified score assembles a beat behind them — orchestration made visible
  * instead of asserted. No gauge, no ring; the numeral itself carries it.
  */
-export function ScoreHero({ score, band, bureauScores, lastRefreshedAt, refreshing, onRefresh }: ScoreHeroProps) {
+export function ScoreHero({
+  score,
+  band,
+  bureauScores,
+  lastRefreshedAt,
+  refreshing,
+  onRefresh,
+}: ScoreHeroProps) {
   const tokens = band ? scoreBandTokens[band] : null;
   const syncedBureaus = bureauScores.filter((b) => b.score !== null).length;
 
@@ -63,8 +70,8 @@ export function ScoreHero({ score, band, bureauScores, lastRefreshedAt, refreshi
           </div>
 
           <p className="mt-4 text-sm text-text-muted">
-            Refreshed {new Date(lastRefreshedAt).toLocaleString('en-ZA')} · {syncedBureaus} of {bureauScores.length}{' '}
-            bureaus synced
+            Refreshed {new Date(lastRefreshedAt).toLocaleString('en-ZA')} · {syncedBureaus} of{' '}
+            {bureauScores.length} bureaus synced
           </p>
         </div>
 
@@ -88,12 +95,16 @@ export function ScoreHero({ score, band, bureauScores, lastRefreshedAt, refreshi
             <div
               key={entry.bureau}
               className="opacity-0"
-              style={{ animation: `bureau-settle 450ms cubic-bezier(0.16,1,0.3,1) ${i * 90}ms both` }}
+              style={{
+                animation: `bureau-settle 450ms cubic-bezier(0.16,1,0.3,1) ${i * 90}ms both`,
+              }}
             >
               <div className="flex items-center gap-1.5 whitespace-nowrap text-xs font-medium uppercase tracking-wide text-text-muted">
                 <span
                   className="h-1.5 w-1.5 shrink-0 rounded-full"
-                  style={{ backgroundColor: hasScore ? (entryTokens?.icon ?? '#0D9488') : '#CBD5E1' }}
+                  style={{
+                    backgroundColor: hasScore ? (entryTokens?.icon ?? '#0D9488') : '#CBD5E1',
+                  }}
                 />
                 <span className="sm:hidden">{BUREAU_INITIALS[entry.bureau]}</span>
                 <span className="hidden sm:inline">{BUREAU_LABELS[entry.bureau]}</span>

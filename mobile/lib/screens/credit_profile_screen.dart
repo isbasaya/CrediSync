@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/credit_profile_service.dart';
+import '../services/api_client.dart';
 import '../theme/app_theme.dart';
 
 class CreditProfileScreen extends StatefulWidget {
@@ -22,14 +23,17 @@ class _CreditProfileScreenState extends State<CreditProfileScreen> {
 
   Future<void> _loadProfile() async {
     try {
-      final profile = await CreditProfileService.getProfile('demo-user-id');
+      final profile = await CreditProfileService.getProfile();
+      if (!mounted) return;
       setState(() {
         _profile = profile;
+        _error = profile == null ? 'No reports yet. Fetch them from the Dashboard.' : null;
         _loading = false;
       });
-    } catch (e) {
+    } on ApiError catch (e) {
+      if (!mounted) return;
       setState(() {
-        _error = 'Could not load credit profile';
+        _error = e.message;
         _loading = false;
       });
     }
@@ -122,11 +126,11 @@ class _CreditProfileScreenState extends State<CreditProfileScreen> {
           ),
           Text(
             score?.toString() ?? '—',
-            style: TextStyle(
-              color: const Color(0xFF12181F),
+            style: const TextStyle(
+              color: Color(0xFF12181F),
               fontSize: 20,
               fontWeight: FontWeight.bold,
-              fontFeatures: const [FontFeature.tabularFigures()],
+              fontFeatures: [FontFeature.tabularFigures()],
             ),
           ),
         ],

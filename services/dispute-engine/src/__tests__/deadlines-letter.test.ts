@@ -25,8 +25,20 @@ describe('computeResolutionDeadline', () => {
 
 describe('generateDisputeLetter', () => {
   const letter = generateDisputeLetter({
-    consumer: { fullName: 'Thandi Nkosi', saIdMasked: '*********9087', mobileNumber: '+27821234567', email: 't@example.co.za' },
-    account: { creditorName: 'Edcon Retail', accountType: 'retail', accountReference: 'SBX-1', currentBalance: 6420, overdueAmount: 6420, status: 'default' },
+    consumer: {
+      fullName: 'Thandi Nkosi',
+      saIdMasked: '*********9087',
+      mobileNumber: '+27821234567',
+      email: 't@example.co.za',
+    },
+    account: {
+      creditorName: 'Edcon Retail',
+      accountType: 'retail',
+      accountReference: 'SBX-1',
+      currentBalance: 6420,
+      overdueAmount: 6420,
+      status: 'default',
+    },
     bureau: 'transunion',
     reason: 'settled_in_full_not_updated',
     description: 'I settled this account in March 2024.\u0007 Proof attached.',
@@ -76,6 +88,10 @@ describe('webhook signatures', () => {
 describe('statusesLeadingTo', () => {
   it('lists the states that may move to a target', () => {
     expect(statusesLeadingTo('submitted')).toEqual(['draft']);
-    expect(statusesLeadingTo('escalated_ncr').sort()).toEqual(['resolved_rejected', 'submitted', 'under_review']);
+    expect(statusesLeadingTo('escalated_ncr').sort()).toEqual([
+      'resolved_rejected',
+      'submitted',
+      'under_review',
+    ]);
   });
 });

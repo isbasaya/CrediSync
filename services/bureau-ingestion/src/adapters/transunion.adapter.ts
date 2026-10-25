@@ -61,12 +61,17 @@ export class TransUnionAdapter implements BureauAdapter {
 
   constructor(
     private readonly baseUrl: string = process.env.TRANSUNION_API_BASE_URL ?? '',
-    private readonly apiKey: string = process.env.TRANSUNION_API_KEY ?? ''
+    private readonly apiKey: string = process.env.TRANSUNION_API_KEY ?? '',
   ) {}
 
   async fetchReport(request: BureauFetchRequest): Promise<NormalizedBureauReport> {
     if (!this.baseUrl || !this.apiKey) {
-      throw new BureauFetchError('transunion', 'auth', 'missing TRANSUNION_API_BASE_URL/API_KEY', false);
+      throw new BureauFetchError(
+        'transunion',
+        'auth',
+        'missing TRANSUNION_API_BASE_URL/API_KEY',
+        false,
+      );
     }
 
     let response: Response;
@@ -85,17 +90,32 @@ export class TransUnionAdapter implements BureauAdapter {
       });
     } catch (err) {
       const isAbort = err instanceof Error && err.name === 'AbortError';
-      throw new BureauFetchError('transunion', isAbort ? 'timeout' : 'upstream_error', String(err), true);
+      throw new BureauFetchError(
+        'transunion',
+        isAbort ? 'timeout' : 'upstream_error',
+        String(err),
+        true,
+      );
     }
 
     if (response.status === 404) {
       throw new BureauFetchError('transunion', 'not_found', 'no file found for consumer', false);
     }
     if (response.status === 429) {
-      throw new BureauFetchError('transunion', 'rate_limited', 'TransUnion API rate limit hit', true);
+      throw new BureauFetchError(
+        'transunion',
+        'rate_limited',
+        'TransUnion API rate limit hit',
+        true,
+      );
     }
     if (!response.ok) {
-      throw new BureauFetchError('transunion', 'upstream_error', `HTTP ${response.status}`, response.status >= 500);
+      throw new BureauFetchError(
+        'transunion',
+        'upstream_error',
+        `HTTP ${response.status}`,
+        response.status >= 500,
+      );
     }
 
     const raw = (await response.json()) as TransUnionRawResponse;

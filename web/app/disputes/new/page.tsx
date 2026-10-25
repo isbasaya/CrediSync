@@ -8,7 +8,13 @@ import { AccountStatusBadge } from '@/components/AccountStatusBadge';
 import { Button, Notice, PageShell } from '@/components/ui';
 import { createDispute, describeError, getBureauAccounts, submitDispute } from '@/lib/api-client';
 import { RequireSession } from '@/lib/session';
-import { BUREAU_LABELS, DISPUTE_REASON_LABELS, type BureauAccountSummary, type Dispute, type DisputeReason } from '@/lib/types';
+import {
+  BUREAU_LABELS,
+  DISPUTE_REASON_LABELS,
+  type BureauAccountSummary,
+  type Dispute,
+  type DisputeReason,
+} from '@/lib/types';
 
 const currency = new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR' });
 const MIN_DESCRIPTION = 20;
@@ -38,7 +44,10 @@ function NewDispute() {
       .catch((err) => setLoadError(describeError(err, 'We couldn’t load your accounts.')));
   }, [clusterId]);
 
-  const record = useMemo(() => account?.reportedBy.find((r) => r.accountId === recordId) ?? null, [account, recordId]);
+  const record = useMemo(
+    () => account?.reportedBy.find((r) => r.accountId === recordId) ?? null,
+    [account, recordId],
+  );
 
   async function onCreate(e: FormEvent) {
     e.preventDefault();
@@ -80,7 +89,11 @@ function NewDispute() {
   if (!account) {
     return (
       <PageShell title="Dispute an account">
-        <div className="h-40 animate-pulse rounded-2xl bg-bg-muted" role="status" aria-label="Loading account" />
+        <div
+          className="h-40 animate-pulse rounded-2xl bg-bg-muted"
+          role="status"
+          aria-label="Loading account"
+        />
       </PageShell>
     );
   }
@@ -99,7 +112,10 @@ function NewDispute() {
           <Button onClick={onSubmit} busy={busy}>
             Send to {BUREAU_LABELS[draft.bureau]}
           </Button>
-          <Link href="/disputes" className="inline-flex h-11 items-center justify-center rounded-lg px-4 text-sm font-semibold text-text-muted hover:text-text-primary">
+          <Link
+            href="/disputes"
+            className="inline-flex h-11 items-center justify-center rounded-lg px-4 text-sm font-semibold text-text-muted hover:text-text-primary"
+          >
             Save as draft
           </Link>
         </div>
@@ -108,31 +124,51 @@ function NewDispute() {
   }
 
   return (
-    <PageShell title={`Dispute ${account.creditorName}`} intro="Disputing is free. The bureau investigates with the lender and must correct anything it can’t verify.">
+    <PageShell
+      title={`Dispute ${account.creditorName}`}
+      intro="Disputing is free. The bureau investigates with the lender and must correct anything it can’t verify."
+    >
       <form onSubmit={onCreate} className="flex flex-col gap-6" noValidate>
         {error && <Notice tone="error">{error}</Notice>}
 
         <fieldset className="flex flex-col gap-3">
-          <legend className="mb-2 text-sm font-semibold text-text-primary">Which bureau’s record is wrong?</legend>
+          <legend className="mb-2 text-sm font-semibold text-text-primary">
+            Which bureau’s record is wrong?
+          </legend>
           {account.reportedBy.map((r) => (
             <label
               key={r.accountId}
               className={`flex cursor-pointer items-center justify-between gap-4 rounded-xl border p-4 transition-colors duration-fast ${
-                recordId === r.accountId ? 'border-teal-700 bg-teal-050' : 'border-border-default bg-bg-surface hover:border-teal-700/50'
+                recordId === r.accountId
+                  ? 'border-teal-700 bg-teal-050'
+                  : 'border-border-default bg-bg-surface hover:border-teal-700/50'
               }`}
             >
               <span className="flex items-center gap-3">
-                <input type="radio" name="record" value={r.accountId} checked={recordId === r.accountId} onChange={() => setRecordId(r.accountId)} className="h-4 w-4 accent-teal-700" />
-                <span className="text-sm font-medium text-text-primary">{BUREAU_LABELS[r.bureau]}</span>
+                <input
+                  type="radio"
+                  name="record"
+                  value={r.accountId}
+                  checked={recordId === r.accountId}
+                  onChange={() => setRecordId(r.accountId)}
+                  className="h-4 w-4 accent-teal-700"
+                />
+                <span className="text-sm font-medium text-text-primary">
+                  {BUREAU_LABELS[r.bureau]}
+                </span>
               </span>
               <span className="flex items-center gap-3">
-                <span className="font-mono text-sm tabular-nums text-text-secondary">{currency.format(r.currentBalance)}</span>
+                <span className="font-mono text-sm tabular-nums text-text-secondary">
+                  {currency.format(r.currentBalance)}
+                </span>
                 <AccountStatusBadge status={r.status} />
               </span>
             </label>
           ))}
           {account.reportedBy.length > 1 && (
-            <p className="text-xs text-text-muted">If more than one bureau is wrong, file a separate dispute for each.</p>
+            <p className="text-xs text-text-muted">
+              If more than one bureau is wrong, file a separate dispute for each.
+            </p>
           )}
         </fieldset>
 
@@ -169,11 +205,16 @@ function NewDispute() {
             className="rounded-lg border border-border-default bg-bg-surface p-3 text-base text-text-primary focus:border-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-700/20"
           />
           <p id="description-hint" className="text-xs text-text-muted">
-            Include dates and amounts if you have them, e.g. “I paid the balance of R6,420 on 14 March 2024.” At least {MIN_DESCRIPTION} characters.
+            Include dates and amounts if you have them, e.g. “I paid the balance of R6,420 on 14
+            March 2024.” At least {MIN_DESCRIPTION} characters.
           </p>
         </div>
 
-        <Button type="submit" busy={busy} disabled={!record || !reason || description.trim().length < MIN_DESCRIPTION}>
+        <Button
+          type="submit"
+          busy={busy}
+          disabled={!record || !reason || description.trim().length < MIN_DESCRIPTION}
+        >
           Preview letter
         </Button>
       </form>

@@ -23,12 +23,19 @@ const uuid = z.string().uuid();
 const createSchema = z.object({
   bureauAccountId: uuid,
   reason: z.enum(DISPUTE_REASONS),
-  description: z.string().trim().min(20, 'Give the bureau enough detail to investigate (at least 20 characters)').max(4000),
+  description: z
+    .string()
+    .trim()
+    .min(20, 'Give the bureau enough detail to investigate (at least 20 characters)')
+    .max(4000),
   evidenceKeys: z.array(z.string().max(200)).max(10).default([]),
 });
 const regenerateSchema = z.object({ description: z.string().trim().min(20).max(4000) });
 const escalateSchema = z.object({ caseNumber: z.string().trim().min(1).max(64) });
-const uploadSchema = z.object({ contentType: z.string(), contentLength: z.number().int().positive() });
+const uploadSchema = z.object({
+  contentType: z.string(),
+  contentLength: z.number().int().positive(),
+});
 const adminResponseSchema = z.object({
   response: z.string().trim().min(1).max(8000),
   reference: z.string().trim().max(100).nullable().default(null),
@@ -92,22 +99,35 @@ export function createApp(pool: Pool) {
       if (!parsed.success) return invalid(res, parsed.error);
 
       const signature = req.headers[SIGNATURE_HEADER];
-      if (!verifyWebhookSignature(typeof signature === 'string' ? signature : undefined, raw, webhookSecret(parsed.data.bureau))) {
+      if (
+        !verifyWebhookSignature(
+          typeof signature === 'string' ? signature : undefined,
+          raw,
+          webhookSecret(parsed.data.bureau),
+        )
+      ) {
         return res.status(401).json({ error: 'invalid_signature' });
       }
 
       const result = await service.handleBureauWebhook(pool, parsed.data);
       return res.status(200).json({ received: true, duplicate: result.duplicate });
-    })
+    }),
   );
 
-  app.use(requireInternalToken, requireActingUser, standardRateLimiter, express.json({ limit: '32kb' }));
+  app.use(
+    requireInternalToken,
+    requireActingUser,
+    standardRateLimiter,
+    express.json({ limit: '32kb' }),
+  );
 
   // --- Consumer routes: always scoped to the acting user -------------------
 
   app.get(
     '/disputes',
-    asyncHandler(async (req, res) => res.json({ disputes: await service.listDisputes(pool, req.actingUserId!) }))
+    asyncHandler(async (req, res) =>
+      res.json({ disputes: await service.listDisputes(pool, req.actingUserId!) }),
+    ),
   );
 
   app.post(
@@ -115,13 +135,23 @@ export function createApp(pool: Pool) {
     asyncHandler(async (req, res) => {
       const parsed = uploadSchema.safeParse(req.body);
       if (!parsed.success) return invalid(res, parsed.error);
-      return res.status(201).json(await createEvidenceUpload(req.actingUserId!, parsed.data.contentType, parsed.data.contentLength));
-    })
+      return res
+        .status(201)
+        .json(
+          await createEvidenceUpload(
+            req.actingUserId!,
+            parsed.data.contentType,
+            parsed.data.contentLength,
+          ),
+        );
+    }),
   );
 
   app.get(
     '/disputes/:id',
-    asyncHandler(async (req, res) => res.json(await service.getDispute(pool, req.actingUserId!, param(req))))
+    asyncHandler(async (req, res) =>
+      res.json(await service.getDispute(pool, req.actingUserId!, param(req))),
+    ),
   );
 
   app.post(
@@ -129,8 +159,10 @@ export function createApp(pool: Pool) {
     asyncHandler(async (req, res) => {
       const parsed = createSchema.safeParse(req.body);
       if (!parsed.success) return invalid(res, parsed.error);
-      return res.status(201).json(await service.createDispute(pool, req.actingUserId!, parsed.data));
-    })
+      return res
+        .status(201)
+        .json(await service.createDispute(pool, req.actingUserId!, parsed.data));
+    }),
   );
 
   app.post(
@@ -138,13 +170,22 @@ export function createApp(pool: Pool) {
     asyncHandler(async (req, res) => {
       const parsed = regenerateSchema.safeParse(req.body);
       if (!parsed.success) return invalid(res, parsed.error);
-      return res.json(await service.regenerateLetter(pool, req.actingUserId!, param(req), parsed.data.description));
-    })
+      return res.json(
+        await service.regenerateLetter(
+          pool,
+          req.actingUserId!,
+          param(req),
+          parsed.data.description,
+        ),
+      );
+    }),
   );
 
   app.post(
     '/disputes/:id/submit',
-    asyncHandler(async (req, res) => res.json(await service.submitDispute(pool, req.actingUserId!, param(req))))
+    asyncHandler(async (req, res) =>
+      res.json(await service.submitDispute(pool, req.actingUserId!, param(req))),
+    ),
   );
 
   app.post(
@@ -152,8 +193,10 @@ export function createApp(pool: Pool) {
     asyncHandler(async (req, res) => {
       const parsed = escalateSchema.safeParse(req.body);
       if (!parsed.success) return invalid(res, parsed.error);
-      return res.json(await service.escalateDispute(pool, req.actingUserId!, param(req), parsed.data.caseNumber));
-    })
+      return res.json(
+        await service.escalateDispute(pool, req.actingUserId!, param(req), parsed.data.caseNumber),
+      );
+    }),
   );
 
   // --- Operations routes: admin / compliance officers only ----------------
@@ -164,8 +207,15 @@ export function createApp(pool: Pool) {
     asyncHandler(async (req, res) => {
       const parsed = referenceSchema.safeParse(req.body);
       if (!parsed.success) return invalid(res, parsed.error);
-      return res.json(await service.recordBureauReference(pool, req.actingUserId!, param(req), parsed.data.bureauReference));
-    })
+      return res.json(
+        await service.recordBureauReference(
+          pool,
+          req.actingUserId!,
+          param(req),
+          parsed.data.bureauReference,
+        ),
+      );
+    }),
   );
 
   app.post(
@@ -174,15 +224,19 @@ export function createApp(pool: Pool) {
     asyncHandler(async (req, res) => {
       const parsed = adminResponseSchema.safeParse(req.body);
       if (!parsed.success) return invalid(res, parsed.error);
-      return res.json(await service.adminRecordResponse(pool, req.actingUserId!, param(req), parsed.data));
-    })
+      return res.json(
+        await service.adminRecordResponse(pool, req.actingUserId!, param(req), parsed.data),
+      );
+    }),
   );
 
-   
   app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
-    if (err instanceof service.DisputeError) return res.status(err.status).json({ error: err.code, message: err.message });
-    if (err instanceof InvalidTransitionError) return res.status(409).json({ error: 'invalid_transition', message: err.message });
-    if (err instanceof EvidenceValidationError) return res.status(400).json({ error: 'invalid_evidence', message: err.message });
+    if (err instanceof service.DisputeError)
+      return res.status(err.status).json({ error: err.code, message: err.message });
+    if (err instanceof InvalidTransitionError)
+      return res.status(409).json({ error: 'invalid_transition', message: err.message });
+    if (err instanceof EvidenceValidationError)
+      return res.status(400).json({ error: 'invalid_evidence', message: err.message });
     logger.error({ err, traceId: req.traceId }, 'unhandled error in dispute-engine service');
     return res.status(500).json({ error: 'internal_error', traceId: req.traceId });
   });

@@ -92,7 +92,13 @@ export const DISPUTE_REASON_LABELS: Record<DisputeReason, string> = {
   incorrect_personal_details: 'My personal details are wrong',
 };
 
-export type DisputeStatus = 'draft' | 'submitted' | 'under_review' | 'resolved_upheld' | 'resolved_rejected' | 'escalated_ncr';
+export type DisputeStatus =
+  | 'draft'
+  | 'submitted'
+  | 'under_review'
+  | 'resolved_upheld'
+  | 'resolved_rejected'
+  | 'escalated_ncr';
 
 export const DISPUTE_STATUS_LABELS: Record<DisputeStatus, string> = {
   draft: 'Draft',

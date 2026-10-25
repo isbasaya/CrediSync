@@ -7,7 +7,7 @@ export class ReadinessError extends Error {
   constructor(
     public readonly status: number,
     public readonly code: string,
-    message: string
+    message: string,
   ) {
     super(message);
     this.name = 'ReadinessError';
@@ -43,7 +43,10 @@ const numOrNull = (v: unknown): number | null => (v === null || v === undefined 
  * the bureau-reported monthly instalments, so debt paid from another
  * account is not missed.
  */
-export function toFeatures(profile: Record<string, unknown>, snapshot: Record<string, unknown> | null): ReadinessFeatures {
+export function toFeatures(
+  profile: Record<string, unknown>,
+  snapshot: Record<string, unknown> | null,
+): ReadinessFeatures {
   const netIncome = snapshot ? num(snapshot.net_income) : 0;
   const bureauInstalment = num(profile.monthly_instalment);
   const bankDebt = snapshot ? num(snapshot.debt_repayment_total) : 0;
@@ -75,17 +78,29 @@ export interface ReadinessResult {
   model_version: string;
 }
 
-export async function scoreBankReadiness(pool: Pool, scorerUrl: string, userId: string, traceId?: string) {
+export async function scoreBankReadiness(
+  pool: Pool,
+  scorerUrl: string,
+  userId: string,
+  traceId?: string,
+) {
   const inputs = await withUser(pool, userId, async (client) => {
-    const profile = await client.query('SELECT * FROM credisync.credit_profiles WHERE user_id = $1 AND is_current', [userId]);
+    const profile = await client.query(
+      'SELECT * FROM credisync.credit_profiles WHERE user_id = $1 AND is_current',
+      [userId],
+    );
     const snapshot = await client.query(
       'SELECT * FROM credisync.financial_health_snapshots WHERE user_id = $1 ORDER BY period_end DESC, created_at DESC LIMIT 1',
-      [userId]
+      [userId],
     );
     return { profile: profile.rows[0], snapshot: snapshot.rows[0] ?? null };
   });
   if (!inputs.profile) {
-    throw new ReadinessError(409, 'no_credit_profile', 'Fetch your credit reports before calculating bank readiness');
+    throw new ReadinessError(
+      409,
+      'no_credit_profile',
+      'Fetch your credit reports before calculating bank readiness',
+    );
   }
 
   const features = toFeatures(inputs.profile, inputs.snapshot);
@@ -108,14 +123,19 @@ export async function scoreBankReadiness(pool: Pool, scorerUrl: string, userId: 
       `UPDATE credisync.credit_profiles
        SET bank_readiness_score = $2, bank_readiness_tier = $3, bank_readiness_model = $4, bank_readiness_scored_at = NOW()
        WHERE id = $1`,
-      [inputs.profile.id, result.score, result.tier, result.model_version]
+      [inputs.profile.id, result.score, result.tier, result.model_version],
     );
     await writeAudit(client, {
       userId,
       eventType: 'bank_readiness_scored',
       resourceType: 'credit_profile',
       resourceId: inputs.profile.id,
-      payload: { score: result.score, tier: result.tier, model: result.model_version, has_bank_data: inputs.snapshot !== null },
+      payload: {
+        score: result.score,
+        tier: result.tier,
+        model: result.model_version,
+        has_bank_data: inputs.snapshot !== null,
+      },
     });
   });
 

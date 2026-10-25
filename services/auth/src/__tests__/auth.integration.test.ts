@@ -40,10 +40,16 @@ describe.skipIf(!testDatabaseAvailable)('auth service (real Postgres)', () => {
   });
 
   it('requires POPIA consent and a valid SA ID', async () => {
-    const noConsent = await request(app).post('/auth/signup').set(internal()).send(signupBody({ popiaConsent: false }));
+    const noConsent = await request(app)
+      .post('/auth/signup')
+      .set(internal())
+      .send(signupBody({ popiaConsent: false }));
     expect(noConsent.status).toBe(400);
 
-    const badId = await request(app).post('/auth/signup').set(internal()).send(signupBody({ saIdNumber: '8001015009088' }));
+    const badId = await request(app)
+      .post('/auth/signup')
+      .set(internal())
+      .send(signupBody({ saIdNumber: '8001015009088' }));
     expect(badId.status).toBe(400);
     expect(badId.body.error).toBe('invalid_sa_id');
   });
@@ -63,7 +69,7 @@ describe.skipIf(!testDatabaseAvailable)('auth service (real Postgres)', () => {
 
     const stored = await db.adminPool.query(
       'SELECT sa_id_encrypted, sa_id_hash FROM credisync.users WHERE id = $1',
-      [userId]
+      [userId],
     );
     const raw = Buffer.from(stored.rows[0].sa_id_encrypted).toString('utf-8');
     expect(raw).not.toContain(VALID_ID);
@@ -71,24 +77,40 @@ describe.skipIf(!testDatabaseAvailable)('auth service (real Postgres)', () => {
 
     const consents = await db.adminPool.query(
       'SELECT consent_type, new_value, policy_version FROM credisync.popia_consent_audit WHERE user_id = $1 ORDER BY id',
-      [userId]
+      [userId],
     );
-    expect(consents.rows.map((r) => r.consent_type)).toEqual(['popia', 'credit_check', 'marketing']);
+    expect(consents.rows.map((r) => r.consent_type)).toEqual([
+      'popia',
+      'credit_check',
+      'marketing',
+    ]);
     expect(consents.rows[0].policy_version).toBe(CURRENT_POPIA_POLICY_VERSION);
   });
 
   it('refuses a second account for the same email or SA ID with one generic message', async () => {
-    const sameId = await request(app).post('/auth/signup').set(internal()).send(signupBody({ email: 'other@example.co.za' }));
+    const sameId = await request(app)
+      .post('/auth/signup')
+      .set(internal())
+      .send(signupBody({ email: 'other@example.co.za' }));
     expect(sameId.status).toBe(409);
     expect(sameId.body.error).toBe('account_exists');
   });
 
   it('logs in case-insensitively and fails generically on a bad password', async () => {
-    const ok = await request(app).post('/auth/login').set(internal()).send({ email: 'THANDI@example.co.za', password: 'correct-horse-battery' });
+    const ok = await request(app)
+      .post('/auth/login')
+      .set(internal())
+      .send({ email: 'THANDI@example.co.za', password: 'correct-horse-battery' });
     expect(ok.status).toBe(200);
 
-    const bad = await request(app).post('/auth/login').set(internal()).send({ email: 'thandi@example.co.za', password: 'wrong-password!' });
-    const unknown = await request(app).post('/auth/login').set(internal()).send({ email: 'nobody@example.co.za', password: 'wrong-password!' });
+    const bad = await request(app)
+      .post('/auth/login')
+      .set(internal())
+      .send({ email: 'thandi@example.co.za', password: 'wrong-password!' });
+    const unknown = await request(app)
+      .post('/auth/login')
+      .set(internal())
+      .send({ email: 'nobody@example.co.za', password: 'wrong-password!' });
     expect(bad.status).toBe(401);
     expect(unknown.status).toBe(401);
     expect(bad.body).toEqual(unknown.body);
@@ -104,7 +126,10 @@ describe.skipIf(!testDatabaseAvailable)('auth service (real Postgres)', () => {
     expect(replay.status).toBe(401);
 
     // The legitimate newer token is now revoked too.
-    const afterReplay = await request(app).post('/auth/refresh').set(internal()).send({ refreshToken: next });
+    const afterReplay = await request(app)
+      .post('/auth/refresh')
+      .set(internal())
+      .send({ refreshToken: next });
     expect(afterReplay.status).toBe(401);
   });
 
@@ -118,13 +143,15 @@ describe.skipIf(!testDatabaseAvailable)('auth service (real Postgres)', () => {
 
     const audit = await db.adminPool.query(
       "SELECT count(*)::int AS n FROM credisync.regulatory_audit_logs WHERE user_id = $1 AND event_type = 'consent_granted'",
-      [userId]
+      [userId],
     );
     expect(audit.rows[0].n).toBe(1);
   });
 
   it('exports personal data without the SA ID', async () => {
-    const res = await request(app).get('/auth/me/export').set(internalHeaders({ id: userId, role: 'consumer' }));
+    const res = await request(app)
+      .get('/auth/me/export')
+      .set(internalHeaders({ id: userId, role: 'consumer' }));
     expect(res.status).toBe(200);
     expect(JSON.stringify(res.body)).not.toContain(VALID_ID);
     expect(res.body.consentHistory.length).toBeGreaterThan(0);
@@ -132,7 +159,10 @@ describe.skipIf(!testDatabaseAvailable)('auth service (real Postgres)', () => {
 
   it('locks the account after repeated failures without revealing it', async () => {
     for (let i = 0; i < 5; i++) {
-      await request(app).post('/auth/login').set(internal()).send({ email: 'thandi@example.co.za', password: `nope-${i}-xxxxxx` });
+      await request(app)
+        .post('/auth/login')
+        .set(internal())
+        .send({ email: 'thandi@example.co.za', password: `nope-${i}-xxxxxx` });
     }
     const correctButLocked = await request(app)
       .post('/auth/login')
@@ -142,13 +172,15 @@ describe.skipIf(!testDatabaseAvailable)('auth service (real Postgres)', () => {
 
     const events = await db.adminPool.query(
       "SELECT count(*)::int AS n FROM credisync.regulatory_audit_logs WHERE user_id = $1 AND event_type = 'account_locked'",
-      [userId]
+      [userId],
     );
     expect(events.rows[0].n).toBe(1);
   });
 
   it('schedules erasure with a grace period', async () => {
-    const res = await request(app).post('/auth/me/deletion-request').set(internalHeaders({ id: userId, role: 'consumer' }));
+    const res = await request(app)
+      .post('/auth/me/deletion-request')
+      .set(internalHeaders({ id: userId, role: 'consumer' }));
     expect(res.status).toBe(202);
     expect(new Date(res.body.scheduledFor).getTime()).toBeGreaterThan(Date.now());
   });

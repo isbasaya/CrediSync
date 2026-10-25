@@ -18,7 +18,7 @@ export interface Forwarded {
 export class UpstreamError extends Error {
   constructor(
     public readonly status: number,
-    message: string
+    message: string,
   ) {
     super(message);
     this.name = 'UpstreamError';
@@ -30,15 +30,27 @@ export class UpstreamError extends Error {
  * trace id. Network failures become 502, timeouts 504; upstream status codes
  * pass through unchanged.
  */
-export async function callService(baseUrl: string, path: string, req: Request, opts: ForwardOptions = {}): Promise<Forwarded> {
-  const actingUser = opts.actingUser === undefined ? (req.user ? { id: req.user.id, role: req.user.role } : undefined) : opts.actingUser ?? undefined;
+export async function callService(
+  baseUrl: string,
+  path: string,
+  req: Request,
+  opts: ForwardOptions = {},
+): Promise<Forwarded> {
+  const actingUser =
+    opts.actingUser === undefined
+      ? req.user
+        ? { id: req.user.id, role: req.user.role }
+        : undefined
+      : (opts.actingUser ?? undefined);
   const headers: Record<string, string> = {
     ...internalHeaders(actingUser, req.traceId),
     'x-client-ip': req.ip ?? '',
     'x-client-user-agent': String(req.headers['user-agent'] ?? '').slice(0, 256),
   };
   const method = opts.method ?? req.method;
-  const hasBody = opts.body !== undefined || (method !== 'GET' && method !== 'DELETE' && req.body && Object.keys(req.body).length > 0);
+  const hasBody =
+    opts.body !== undefined ||
+    (method !== 'GET' && method !== 'DELETE' && req.body && Object.keys(req.body).length > 0);
   if (hasBody) headers['content-type'] = 'application/json';
 
   let response: globalThis.Response;
@@ -50,8 +62,12 @@ export async function callService(baseUrl: string, path: string, req: Request, o
       signal: AbortSignal.timeout(opts.timeoutMs ?? 10_000),
     });
   } catch (err) {
-    const timedOut = err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError');
-    throw new UpstreamError(timedOut ? 504 : 502, timedOut ? 'upstream_timeout' : 'upstream_unavailable');
+    const timedOut =
+      err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError');
+    throw new UpstreamError(
+      timedOut ? 504 : 502,
+      timedOut ? 'upstream_timeout' : 'upstream_unavailable',
+    );
   }
 
   const text = response.status === 204 ? '' : await response.text();
@@ -69,7 +85,13 @@ export async function callService(baseUrl: string, path: string, req: Request, o
 const PASSTHROUGH_HEADERS = ['retry-after', 'content-disposition'];
 
 /** Forwards and writes the upstream response to the client. */
-export async function forward(baseUrl: string, path: string, req: Request, res: Response, opts: ForwardOptions = {}): Promise<void> {
+export async function forward(
+  baseUrl: string,
+  path: string,
+  req: Request,
+  res: Response,
+  opts: ForwardOptions = {},
+): Promise<void> {
   const result = await callService(baseUrl, path, req, opts);
   for (const h of PASSTHROUGH_HEADERS) {
     const v = result.headers.get(h);

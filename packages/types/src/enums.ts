@@ -7,7 +7,14 @@
 export const SCORE_BANDS = ['excellent', 'good', 'fair', 'poor', 'very_poor'] as const;
 export type ScoreBand = (typeof SCORE_BANDS)[number];
 
-export const ACCOUNT_STATUSES = ['current', 'arrears', 'default', 'judgement', 'written_off', 'unknown'] as const;
+export const ACCOUNT_STATUSES = [
+  'current',
+  'arrears',
+  'default',
+  'judgement',
+  'written_off',
+  'unknown',
+] as const;
 export type AccountStatus = (typeof ACCOUNT_STATUSES)[number];
 
 export const BUREAU_SOURCES = ['transunion', 'experian', 'xds'] as const;

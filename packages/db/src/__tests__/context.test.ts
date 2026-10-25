@@ -23,7 +23,10 @@ describe('withUser', () => {
     await withUser(pool, USER, async (c) => c.query('SELECT 1'));
 
     expect(calls[0]!.sql).toBe('BEGIN');
-    expect(calls[1]).toEqual({ sql: 'SELECT set_config($1, $2, true)', params: ['app.current_user_id', USER] });
+    expect(calls[1]).toEqual({
+      sql: 'SELECT set_config($1, $2, true)',
+      params: ['app.current_user_id', USER],
+    });
     expect(calls.at(-1)!.sql).toBe('COMMIT');
     expect(calls.some((c) => /^SET\s/i.test(c.sql))).toBe(false);
     expect(client.release).toHaveBeenCalled();
@@ -40,7 +43,7 @@ describe('withUser', () => {
     await expect(
       withUser(pool, USER, async () => {
         throw new Error('boom');
-      })
+      }),
     ).rejects.toThrow('boom');
     expect(calls.at(-1)!.sql).toBe('ROLLBACK');
     expect(client.release).toHaveBeenCalled();
@@ -51,7 +54,10 @@ describe('withSystem', () => {
   it('opts into system context for the transaction only', async () => {
     const { pool, calls } = fakePool();
     await withSystem(pool, async () => undefined);
-    expect(calls[1]).toEqual({ sql: 'SELECT set_config($1, $2, true)', params: ['app.system_context', 'on'] });
+    expect(calls[1]).toEqual({
+      sql: 'SELECT set_config($1, $2, true)',
+      params: ['app.system_context', 'on'],
+    });
   });
 });
 

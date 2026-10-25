@@ -16,14 +16,18 @@ export class OpenBankingFetchError extends Error {
   constructor(
     public readonly source: string,
     public readonly cause: 'timeout' | 'auth' | 'consent_revoked' | 'upstream_error',
-    message: string
+    message: string,
   ) {
     super(`[${source}] ${cause}: ${message}`);
     this.name = 'OpenBankingFetchError';
   }
 }
 
-export async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = 10_000): Promise<Response> {
+export async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs = 10_000,
+): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {

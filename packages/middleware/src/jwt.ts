@@ -71,10 +71,19 @@ export function verifyAccessToken(token: string): AuthenticatedUser {
       issuer: ISSUER,
       audience: AUDIENCE,
     }) as jwt.JwtPayload;
-    if (typeof decoded.sub !== 'string' || typeof decoded.email !== 'string' || !ROLES.has(decoded.role)) {
+    if (
+      typeof decoded.sub !== 'string' ||
+      typeof decoded.email !== 'string' ||
+      !ROLES.has(decoded.role)
+    ) {
       throw new InvalidTokenError();
     }
-    return { id: decoded.sub, email: decoded.email, role: decoded.role as Role, verified: decoded.verified === true };
+    return {
+      id: decoded.sub,
+      email: decoded.email,
+      role: decoded.role as Role,
+      verified: decoded.verified === true,
+    };
   } catch {
     throw new InvalidTokenError();
   }

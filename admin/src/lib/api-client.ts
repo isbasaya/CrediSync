@@ -9,7 +9,7 @@ export class ApiError extends Error {
   constructor(
     public readonly status: number,
     public readonly code: string,
-    message: string
+    message: string,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -35,7 +35,8 @@ async function request<T>(path: string, init: RequestInit = {}, retried = false)
 
   if (response.status === 401 && !path.startsWith('/auth/')) {
     if (!retried && (await refreshSession())) return request<T>(path, init, true);
-    if (typeof window !== 'undefined' && window.location.pathname !== '/login') window.location.href = '/login';
+    if (typeof window !== 'undefined' && window.location.pathname !== '/login')
+      window.location.href = '/login';
     throw new ApiError(401, 'unauthorized', 'Your session has ended. Sign in again.');
   }
 
@@ -58,5 +59,9 @@ async function request<T>(path: string, init: RequestInit = {}, retried = false)
 
 export const api = {
   get: <T>(path: string) => request<T>(path),
-  post: <T>(path: string, body?: unknown) => request<T>(path, { method: 'POST', body: body === undefined ? undefined : JSON.stringify(body) }),
+  post: <T>(path: string, body?: unknown) =>
+    request<T>(path, {
+      method: 'POST',
+      body: body === undefined ? undefined : JSON.stringify(body),
+    }),
 };

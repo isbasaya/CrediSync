@@ -14,7 +14,10 @@ import {
 } from '@credisync/middleware';
 import * as service from './service';
 
-const logger = pino({ name: 'auth-service', redact: ['req.headers.authorization', 'password', 'saIdNumber'] });
+const logger = pino({
+  name: 'auth-service',
+  redact: ['req.headers.authorization', 'password', 'saIdNumber'],
+});
 
 const signupSchema = z.object({
   email: z.string().email().max(254),
@@ -23,7 +26,9 @@ const signupSchema = z.object({
   lastName: z.string().trim().min(1).max(100),
   mobileNumber: z.string().regex(/^\+27[0-9]{9}$/, 'must be a valid SA mobile number (+27...)'),
   saIdNumber: z.string().regex(/^[0-9 ]{13,16}$/, 'must be a 13-digit SA ID number'),
-  popiaConsent: z.literal(true, { errorMap: () => ({ message: 'POPIA consent is required to create an account' }) }),
+  popiaConsent: z.literal(true, {
+    errorMap: () => ({ message: 'POPIA consent is required to create an account' }),
+  }),
   popiaPolicyVersion: z.string().min(1),
   creditCheckConsent: z.boolean(),
   marketingConsent: z.boolean().optional(),
@@ -46,7 +51,10 @@ function meta(req: Request): service.RequestMeta {
   const forwardedIp = req.headers['x-client-ip'];
   return {
     ip: typeof forwardedIp === 'string' ? forwardedIp : (req.ip ?? null),
-    userAgent: (req.headers['x-client-user-agent'] as string | undefined) ?? req.headers['user-agent'] ?? null,
+    userAgent:
+      (req.headers['x-client-user-agent'] as string | undefined) ??
+      req.headers['user-agent'] ??
+      null,
   };
 }
 
@@ -86,7 +94,7 @@ export function createApp(pool: Pool) {
       if (!parsed.success) return badRequest(res, parsed.error);
       const result = await service.signup(pool, parsed.data, meta(req));
       return res.status(201).json(result);
-    })
+    }),
   );
 
   app.post(
@@ -97,7 +105,7 @@ export function createApp(pool: Pool) {
       if (!parsed.success) return badRequest(res, parsed.error);
       const result = await service.login(pool, parsed.data.email, parsed.data.password, meta(req));
       return res.status(200).json(result);
-    })
+    }),
   );
 
   app.post(
@@ -107,7 +115,7 @@ export function createApp(pool: Pool) {
       const parsed = tokenSchema.safeParse(req.body);
       if (!parsed.success) return badRequest(res, parsed.error);
       return res.status(200).json(await service.refresh(pool, parsed.data.refreshToken, meta(req)));
-    })
+    }),
   );
 
   app.post(
@@ -116,7 +124,7 @@ export function createApp(pool: Pool) {
       const parsed = tokenSchema.safeParse(req.body);
       if (parsed.success) await service.logout(pool, parsed.data.refreshToken, meta(req));
       return res.status(204).send();
-    })
+    }),
   );
 
   app.post(
@@ -128,7 +136,7 @@ export function createApp(pool: Pool) {
       const result = await service.verifyEmail(pool, parsed.data.token);
       if (!result) return res.status(400).json({ error: 'invalid_or_expired_token' });
       return res.status(200).json(result);
-    })
+    }),
   );
 
   app.get(
@@ -138,7 +146,7 @@ export function createApp(pool: Pool) {
       const profile = await service.getProfile(pool, req.actingUserId!);
       if (!profile) return res.status(404).json({ error: 'not_found' });
       return res.json(profile);
-    })
+    }),
   );
 
   app.patch(
@@ -149,7 +157,7 @@ export function createApp(pool: Pool) {
       if (!parsed.success) return badRequest(res, parsed.error);
       await service.updateConsents(pool, req.actingUserId!, parsed.data, meta(req));
       return res.json(await service.getProfile(pool, req.actingUserId!));
-    })
+    }),
   );
 
   app.get(
@@ -158,15 +166,17 @@ export function createApp(pool: Pool) {
     asyncHandler(async (req, res) => {
       res.setHeader('Content-Disposition', 'attachment; filename="credisync-personal-data.json"');
       return res.json(await service.exportPersonalData(pool, req.actingUserId!, meta(req)));
-    })
+    }),
   );
 
   app.post(
     '/auth/me/deletion-request',
     requireActingUser,
     asyncHandler(async (req, res) => {
-      return res.status(202).json(await service.requestDeletion(pool, req.actingUserId!, meta(req)));
-    })
+      return res
+        .status(202)
+        .json(await service.requestDeletion(pool, req.actingUserId!, meta(req)));
+    }),
   );
 
   app.delete(
@@ -175,10 +185,9 @@ export function createApp(pool: Pool) {
     asyncHandler(async (req, res) => {
       await service.cancelDeletion(pool, req.actingUserId!);
       return res.status(204).send();
-    })
+    }),
   );
 
-   
   app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
     if (err instanceof service.AuthError) {
       return res.status(err.statusCode).json({ error: err.code, message: err.message });

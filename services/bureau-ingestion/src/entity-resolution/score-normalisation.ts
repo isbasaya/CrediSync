@@ -21,7 +21,9 @@ export const DEFAULT_SCORE_RANGES: ScoreRanges = {
 
 export function loadScoreRanges(env: NodeJS.ProcessEnv = process.env): ScoreRanges {
   if (!env.BUREAU_SCORE_RANGES) return DEFAULT_SCORE_RANGES;
-  const parsed = JSON.parse(env.BUREAU_SCORE_RANGES) as Partial<Record<BureauSource, [number, number]>>;
+  const parsed = JSON.parse(env.BUREAU_SCORE_RANGES) as Partial<
+    Record<BureauSource, [number, number]>
+  >;
   const ranges = { ...DEFAULT_SCORE_RANGES };
   for (const bureau of Object.keys(ranges) as BureauSource[]) {
     const r = parsed[bureau];
@@ -36,7 +38,11 @@ export function loadScoreRanges(env: NodeJS.ProcessEnv = process.env): ScoreRang
 }
 
 /** Maps a bureau's raw score onto the common 0–999 scale. */
-export function normaliseScore(bureau: BureauSource, score: number, ranges: ScoreRanges = DEFAULT_SCORE_RANGES): number {
+export function normaliseScore(
+  bureau: BureauSource,
+  score: number,
+  ranges: ScoreRanges = DEFAULT_SCORE_RANGES,
+): number {
   const [min, max] = ranges[bureau];
   const ratio = (Math.min(max, Math.max(min, score)) - min) / (max - min);
   return Math.round(ratio * 999);

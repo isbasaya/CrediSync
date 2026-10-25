@@ -21,7 +21,7 @@ export class BureauFetchError extends Error {
     public readonly bureau: string,
     public readonly cause: 'timeout' | 'auth' | 'not_found' | 'rate_limited' | 'upstream_error',
     message: string,
-    public readonly retryable: boolean
+    public readonly retryable: boolean,
   ) {
     super(`[${bureau}] ${cause}: ${message}`);
     this.name = 'BureauFetchError';
@@ -37,7 +37,7 @@ export class BureauFetchError extends Error {
 export async function fetchWithTimeout(
   url: string,
   init: RequestInit,
-  timeoutMs = 8000
+  timeoutMs = 8000,
 ): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);

@@ -24,7 +24,7 @@ function levenshtein(a: string, b: string): number {
       currRow[j] = Math.min(
         prevRow[j] + 1, // deletion
         currRow[j - 1] + 1, // insertion
-        prevRow[j - 1] + cost // substitution
+        prevRow[j - 1] + cost, // substitution
       );
     }
     [prevRow, currRow] = [currRow, prevRow];

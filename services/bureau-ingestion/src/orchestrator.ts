@@ -25,10 +25,11 @@ export function createAdapters(env: NodeJS.ProcessEnv = process.env): BureauAdap
 
 export class RefreshRefusedError extends Error {
   constructor(
-    public readonly code: 'not_found' | 'email_not_verified' | 'credit_check_consent_required' | 'refresh_too_soon',
+    public readonly code:
+      'not_found' | 'email_not_verified' | 'credit_check_consent_required' | 'refresh_too_soon',
     public readonly status: number,
     message: string,
-    public readonly retryAfterSeconds?: number
+    public readonly retryAfterSeconds?: number,
   ) {
     super(message);
     this.name = 'RefreshRefusedError';
@@ -53,25 +54,34 @@ export interface RefreshResult {
 export async function refreshCreditProfile(
   pool: Pool,
   userId: string,
-  adapters: BureauAdapter[] = createAdapters()
+  adapters: BureauAdapter[] = createAdapters(),
 ): Promise<RefreshResult> {
   const identity = await loadConsumerIdentity(pool, userId);
   if (!identity) throw new RefreshRefusedError('not_found', 404, 'User not found');
   if (!identity.isVerified) {
-    throw new RefreshRefusedError('email_not_verified', 403, 'Verify your email address before we fetch your credit reports');
+    throw new RefreshRefusedError(
+      'email_not_verified',
+      403,
+      'Verify your email address before we fetch your credit reports',
+    );
   }
   if (!identity.creditCheckConsent) {
     throw new RefreshRefusedError(
       'credit_check_consent_required',
       403,
-      'Give permission for CrediSync to request your credit reports first'
+      'Give permission for CrediSync to request your credit reports first',
     );
   }
   if (identity.lastRefreshAt) {
     const elapsed = Date.now() - identity.lastRefreshAt.getTime();
     if (elapsed < REFRESH_COOLDOWN_MS) {
       const retryAfter = Math.ceil((REFRESH_COOLDOWN_MS - elapsed) / 1000);
-      throw new RefreshRefusedError('refresh_too_soon', 429, 'Your reports were refreshed recently. Try again later.', retryAfter);
+      throw new RefreshRefusedError(
+        'refresh_too_soon',
+        429,
+        'Your reports were refreshed recently. Try again later.',
+        retryAfter,
+      );
     }
   }
 
@@ -95,7 +105,7 @@ export async function refreshCreditProfile(
         recordFailure(adapter.bureau);
         throw err;
       }
-    })
+    }),
   );
 
   const reports: NormalizedBureauReport[] = [];
@@ -110,14 +120,21 @@ export async function refreshCreditProfile(
       const err = result.reason;
       // Error text is ours (BureauFetchError) or generic; never include request data.
       const reason = err instanceof BureauFetchError ? err.message : 'unexpected error';
-      bureauFailures.push({ bureau, reason, retryable: err instanceof BureauFetchError ? err.retryable : true });
+      bureauFailures.push({
+        bureau,
+        reason,
+        retryable: err instanceof BureauFetchError ? err.retryable : true,
+      });
       await logBureauPull(pool, userId, bureau, false, reason);
-      if (!(err instanceof BureauFetchError)) logger.error({ bureau, err: String(err).slice(0, 200) }, 'bureau adapter failed');
+      if (!(err instanceof BureauFetchError))
+        logger.error({ bureau, err: String(err).slice(0, 200) }, 'bureau adapter failed');
     }
   }
 
   if (reports.length === 0) {
-    throw new Error(`All bureau fetches failed: ${bureauFailures.map((f) => `${f.bureau}=${f.reason}`).join(', ')}`);
+    throw new Error(
+      `All bureau fetches failed: ${bureauFailures.map((f) => `${f.bureau}=${f.reason}`).join(', ')}`,
+    );
   }
 
   const profile = buildUnifiedProfile(reports, loadScoreRanges());
@@ -125,7 +142,7 @@ export async function refreshCreditProfile(
     pool,
     userId,
     profile,
-    reports.map((r) => r.bureau as BureauSource)
+    reports.map((r) => r.bureau as BureauSource),
   );
   return { creditProfileId, profile, bureauFailures };
 }

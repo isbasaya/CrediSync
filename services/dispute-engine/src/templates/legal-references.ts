@@ -17,7 +17,8 @@ export const LEGAL_REVIEW = {
 
 export const CITATIONS = {
   /** Right to challenge the accuracy of information held by a credit bureau. */
-  challengeRight: 'section 72 of the National Credit Act 34 of 2005 and the regulations made under it',
+  challengeRight:
+    'section 72 of the National Credit Act 34 of 2005 and the regulations made under it',
   /** Right to request correction of personal information. */
   popiaCorrection: 'section 24 of the Protection of Personal Information Act 4 of 2013',
   /** Response period applied by the deadline calculator (see deadlines.ts). */
@@ -41,19 +42,37 @@ export interface BureauContact {
  * Overridable per environment with BUREAU_DISPUTE_CONTACTS (JSON).
  */
 const DEFAULT_CONTACTS: Record<BureauSource, BureauContact> = {
-  transunion: { displayName: 'TransUnion Credit Bureau (Pty) Ltd — Consumer Disputes', disputeChannel: null, verified: false },
-  experian: { displayName: 'Experian South Africa (Pty) Ltd — Consumer Disputes', disputeChannel: null, verified: false },
-  xds: { displayName: 'Xpert Decision Systems (XDS) — Consumer Disputes', disputeChannel: null, verified: false },
+  transunion: {
+    displayName: 'TransUnion Credit Bureau (Pty) Ltd — Consumer Disputes',
+    disputeChannel: null,
+    verified: false,
+  },
+  experian: {
+    displayName: 'Experian South Africa (Pty) Ltd — Consumer Disputes',
+    disputeChannel: null,
+    verified: false,
+  },
+  xds: {
+    displayName: 'Xpert Decision Systems (XDS) — Consumer Disputes',
+    disputeChannel: null,
+    verified: false,
+  },
 };
 
-export function bureauContacts(env: NodeJS.ProcessEnv = process.env): Record<BureauSource, BureauContact> {
+export function bureauContacts(
+  env: NodeJS.ProcessEnv = process.env,
+): Record<BureauSource, BureauContact> {
   if (!env.BUREAU_DISPUTE_CONTACTS) return DEFAULT_CONTACTS;
-  const overrides = JSON.parse(env.BUREAU_DISPUTE_CONTACTS) as Partial<Record<BureauSource, BureauContact>>;
+  const overrides = JSON.parse(env.BUREAU_DISPUTE_CONTACTS) as Partial<
+    Record<BureauSource, BureauContact>
+  >;
   return { ...DEFAULT_CONTACTS, ...overrides };
 }
 
 export function assertLegalReviewComplete(env: NodeJS.ProcessEnv = process.env): void {
   if (env.NODE_ENV === 'production' && !LEGAL_REVIEW.reviewed) {
-    throw new Error('Dispute letter citations have not been legally reviewed; refusing to generate letters in production');
+    throw new Error(
+      'Dispute letter citations have not been legally reviewed; refusing to generate letters in production',
+    );
   }
 }

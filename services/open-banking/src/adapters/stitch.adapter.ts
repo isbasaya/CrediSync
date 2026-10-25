@@ -54,7 +54,7 @@ export class StitchAdapter implements OpenBankingAdapter {
 
   constructor(
     private readonly baseUrl: string = process.env.STITCH_API_BASE_URL ?? '',
-    private readonly clientId: string = process.env.STITCH_CLIENT_ID ?? ''
+    private readonly clientId: string = process.env.STITCH_CLIENT_ID ?? '',
   ) {}
 
   async fetchTransactions(request: OpenBankingFetchRequest): Promise<NormalizedAccountFeed> {
@@ -78,11 +78,19 @@ export class StitchAdapter implements OpenBankingAdapter {
       });
     } catch (err) {
       const isAbort = err instanceof Error && err.name === 'AbortError';
-      throw new OpenBankingFetchError('stitch', isAbort ? 'timeout' : 'upstream_error', String(err));
+      throw new OpenBankingFetchError(
+        'stitch',
+        isAbort ? 'timeout' : 'upstream_error',
+        String(err),
+      );
     }
 
     if (response.status === 401 || response.status === 403) {
-      throw new OpenBankingFetchError('stitch', 'consent_revoked', 'account link token invalid or revoked');
+      throw new OpenBankingFetchError(
+        'stitch',
+        'consent_revoked',
+        'account link token invalid or revoked',
+      );
     }
     if (!response.ok) {
       throw new OpenBankingFetchError('stitch', 'upstream_error', `HTTP ${response.status}`);
@@ -96,7 +104,10 @@ export class StitchAdapter implements OpenBankingAdapter {
       periodStart: request.periodStart,
       periodEnd: request.periodEnd,
       transactions: raw.transactions.map(mapTransaction),
-      closingBalances: raw.dailyBalances.map((b) => ({ date: b.date, balance: b.balanceInCents / 100 })),
+      closingBalances: raw.dailyBalances.map((b) => ({
+        date: b.date,
+        balance: b.balanceInCents / 100,
+      })),
     };
   }
 }

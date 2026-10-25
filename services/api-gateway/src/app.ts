@@ -34,7 +34,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): GatewayConfig 
     disputeEngineUrl: env.DISPUTE_ENGINE_URL ?? 'http://localhost:4002',
     openBankingUrl: env.OPEN_BANKING_URL ?? 'http://localhost:4003',
     bankReadinessUrl: env.BANK_READINESS_URL ?? 'http://localhost:8000',
-    allowedOrigins: (env.ALLOWED_ORIGINS ?? env.WEB_ORIGIN ?? 'http://localhost:3000,http://localhost:3001')
+    allowedOrigins: (
+      env.ALLOWED_ORIGINS ??
+      env.WEB_ORIGIN ??
+      'http://localhost:3000,http://localhost:3001'
+    )
       .split(',')
       .map((o) => o.trim())
       .filter(Boolean),
@@ -70,7 +74,7 @@ export function createApp(pool: Pool, config: GatewayConfig = loadConfig()) {
       credentials: true,
       allowedHeaders: ['content-type', 'authorization', 'x-client', 'x-trace-id'],
       exposedHeaders: ['x-trace-id', 'retry-after'],
-    })
+    }),
   );
 
   // Liveness for the load balancer: the gateway itself only. Downstream
@@ -93,14 +97,18 @@ export function createApp(pool: Pool, config: GatewayConfig = loadConfig()) {
             'x-credisync-signature': String(req.headers['x-credisync-signature'] ?? ''),
             ...(req.traceId ? { 'x-trace-id': req.traceId } : {}),
           },
-          body: Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0),
+          // Exact bytes as UTF-8 text: the signature is computed over this payload.
+          body: Buffer.isBuffer(req.body) ? req.body.toString('utf-8') : '',
           signal: AbortSignal.timeout(10_000),
         });
       } catch {
         throw new UpstreamError(502, 'upstream_unavailable');
       }
-      res.status(upstream.status).type('application/json').send(await upstream.text());
-    })
+      res
+        .status(upstream.status)
+        .type('application/json')
+        .send(await upstream.text());
+    }),
   );
 
   app.use(standardRateLimiter);
@@ -118,7 +126,12 @@ export function createApp(pool: Pool, config: GatewayConfig = loadConfig()) {
       res.status(r.status).json(r.data);
     });
 
-  app.get('/api/auth/policy', asyncHandler((req, res) => forward(config.authUrl, '/auth/policy', req, res, { actingUser: null })));
+  app.get(
+    '/api/auth/policy',
+    asyncHandler((req, res) =>
+      forward(config.authUrl, '/auth/policy', req, res, { actingUser: null }),
+    ),
+  );
   app.post('/api/auth/signup', authForward('/auth/signup'));
   app.post('/api/auth/login', authForward('/auth/login'));
   app.post('/api/auth/verify-email', authForward('/auth/verify-email'));
@@ -130,20 +143,29 @@ export function createApp(pool: Pool, config: GatewayConfig = loadConfig()) {
         clearSession(res);
         return res.status(401).json({ error: 'missing_refresh_token' });
       }
-      const r = await callService(config.authUrl, '/auth/refresh', req, { actingUser: null, method: 'POST', body: { refreshToken } });
+      const r = await callService(config.authUrl, '/auth/refresh', req, {
+        actingUser: null,
+        method: 'POST',
+        body: { refreshToken },
+      });
       if (r.status === 200) return deliverSession(req, res, 200, r.data as Record<string, unknown>);
       clearSession(res);
       return res.status(r.status).json(r.data);
-    })
+    }),
   );
   app.post(
     '/api/auth/logout',
     asyncHandler(async (req, res) => {
       const refreshToken = refreshTokenFrom(req);
-      if (refreshToken) await callService(config.authUrl, '/auth/logout', req, { actingUser: null, method: 'POST', body: { refreshToken } });
+      if (refreshToken)
+        await callService(config.authUrl, '/auth/logout', req, {
+          actingUser: null,
+          method: 'POST',
+          body: { refreshToken },
+        });
       clearSession(res);
       res.status(204).end();
-    })
+    }),
   );
 
   // ---- Everything below requires a signed-in user ------------------------
@@ -151,46 +173,100 @@ export function createApp(pool: Pool, config: GatewayConfig = loadConfig()) {
   app.use('/api', requireAuth);
 
   // Account, consent and POPIA rights
-  app.get('/api/me', asyncHandler((req, res) => forward(config.authUrl, '/auth/me', req, res)));
-  app.patch('/api/me/consents', asyncHandler((req, res) => forward(config.authUrl, '/auth/me/consents', req, res)));
-  app.get('/api/me/export', asyncHandler((req, res) => forward(config.authUrl, '/auth/me/export', req, res)));
-  app.post('/api/me/deletion-request', asyncHandler((req, res) => forward(config.authUrl, '/auth/me/deletion-request', req, res)));
-  app.delete('/api/me/deletion-request', asyncHandler((req, res) => forward(config.authUrl, '/auth/me/deletion-request', req, res)));
+  app.get(
+    '/api/me',
+    asyncHandler((req, res) => forward(config.authUrl, '/auth/me', req, res)),
+  );
+  app.patch(
+    '/api/me/consents',
+    asyncHandler((req, res) => forward(config.authUrl, '/auth/me/consents', req, res)),
+  );
+  app.get(
+    '/api/me/export',
+    asyncHandler((req, res) => forward(config.authUrl, '/auth/me/export', req, res)),
+  );
+  app.post(
+    '/api/me/deletion-request',
+    asyncHandler((req, res) => forward(config.authUrl, '/auth/me/deletion-request', req, res)),
+  );
+  app.delete(
+    '/api/me/deletion-request',
+    asyncHandler((req, res) => forward(config.authUrl, '/auth/me/deletion-request', req, res)),
+  );
 
   // Credit profile (always the signed-in user's own)
-  app.get('/api/credit-profile', asyncHandler((req, res) => forward(config.bureauIngestionUrl, '/credit-profile', req, res)));
-  app.get('/api/credit-profile/accounts', asyncHandler((req, res) => forward(config.bureauIngestionUrl, '/credit-profile/accounts', req, res)));
+  app.get(
+    '/api/credit-profile',
+    asyncHandler((req, res) => forward(config.bureauIngestionUrl, '/credit-profile', req, res)),
+  );
+  app.get(
+    '/api/credit-profile/accounts',
+    asyncHandler((req, res) =>
+      forward(config.bureauIngestionUrl, '/credit-profile/accounts', req, res),
+    ),
+  );
   app.post(
     '/api/credit-profile/refresh',
     perUserLimiter,
-    asyncHandler((req, res) => forward(config.bureauIngestionUrl, '/credit-profile/refresh', req, res, { timeoutMs: 45_000 }))
+    asyncHandler((req, res) =>
+      forward(config.bureauIngestionUrl, '/credit-profile/refresh', req, res, {
+        timeoutMs: 45_000,
+      }),
+    ),
   );
 
   // Disputes
-  app.get('/api/disputes', asyncHandler((req, res) => forward(config.disputeEngineUrl, '/disputes', req, res)));
-  app.post('/api/disputes', asyncHandler((req, res) => forward(config.disputeEngineUrl, '/disputes', req, res)));
+  app.get(
+    '/api/disputes',
+    asyncHandler((req, res) => forward(config.disputeEngineUrl, '/disputes', req, res)),
+  );
+  app.post(
+    '/api/disputes',
+    asyncHandler((req, res) => forward(config.disputeEngineUrl, '/disputes', req, res)),
+  );
   app.post(
     '/api/disputes/evidence-uploads',
-    asyncHandler((req, res) => forward(config.disputeEngineUrl, '/disputes/evidence-uploads', req, res))
+    asyncHandler((req, res) =>
+      forward(config.disputeEngineUrl, '/disputes/evidence-uploads', req, res),
+    ),
   );
-  app.get('/api/disputes/:id', asyncHandler((req, res) => forward(config.disputeEngineUrl, `/disputes/${id(req)}`, req, res)));
+  app.get(
+    '/api/disputes/:id',
+    asyncHandler((req, res) => forward(config.disputeEngineUrl, `/disputes/${id(req)}`, req, res)),
+  );
   for (const action of ['regenerate-letter', 'submit', 'escalate']) {
     app.post(
       `/api/disputes/:id/${action}`,
-      asyncHandler((req, res) => forward(config.disputeEngineUrl, `/disputes/${id(req)}/${action}`, req, res))
+      asyncHandler((req, res) =>
+        forward(config.disputeEngineUrl, `/disputes/${id(req)}/${action}`, req, res),
+      ),
     );
   }
 
   // Open banking
-  app.get('/api/open-banking/links', asyncHandler((req, res) => forward(config.openBankingUrl, '/links', req, res)));
-  app.post('/api/open-banking/links', asyncHandler((req, res) => forward(config.openBankingUrl, '/links', req, res)));
-  app.delete('/api/open-banking/links/:id', asyncHandler((req, res) => forward(config.openBankingUrl, `/links/${id(req)}`, req, res)));
+  app.get(
+    '/api/open-banking/links',
+    asyncHandler((req, res) => forward(config.openBankingUrl, '/links', req, res)),
+  );
+  app.post(
+    '/api/open-banking/links',
+    asyncHandler((req, res) => forward(config.openBankingUrl, '/links', req, res)),
+  );
+  app.delete(
+    '/api/open-banking/links/:id',
+    asyncHandler((req, res) => forward(config.openBankingUrl, `/links/${id(req)}`, req, res)),
+  );
   app.post(
     '/api/open-banking/snapshots/ingest',
     perUserLimiter,
-    asyncHandler((req, res) => forward(config.openBankingUrl, '/snapshots/ingest', req, res, { timeoutMs: 30_000 }))
+    asyncHandler((req, res) =>
+      forward(config.openBankingUrl, '/snapshots/ingest', req, res, { timeoutMs: 30_000 }),
+    ),
   );
-  app.get('/api/open-banking/snapshots/latest', asyncHandler((req, res) => forward(config.openBankingUrl, '/snapshots/latest', req, res)));
+  app.get(
+    '/api/open-banking/snapshots/latest',
+    asyncHandler((req, res) => forward(config.openBankingUrl, '/snapshots/latest', req, res)),
+  );
 
   // Bank readiness: computed from server-side data only
   app.post(
@@ -198,16 +274,18 @@ export function createApp(pool: Pool, config: GatewayConfig = loadConfig()) {
     perUserLimiter,
     asyncHandler(async (req, res) => {
       res.json(await scoreBankReadiness(pool, config.bankReadinessUrl, req.user!.id, req.traceId));
-    })
+    }),
   );
 
   app.use('/api', (_req, res) => res.status(404).json({ error: 'not_found' }));
 
-   
   app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
-    if (err instanceof UpstreamError) return res.status(err.status).json({ error: err.message, traceId: req.traceId });
-    if (err instanceof ReadinessError) return res.status(err.status).json({ error: err.code, message: err.message });
-    if ((err as { type?: string }).type === 'entity.parse.failed') return res.status(400).json({ error: 'invalid_json' });
+    if (err instanceof UpstreamError)
+      return res.status(err.status).json({ error: err.message, traceId: req.traceId });
+    if (err instanceof ReadinessError)
+      return res.status(err.status).json({ error: err.code, message: err.message });
+    if ((err as { type?: string }).type === 'entity.parse.failed')
+      return res.status(400).json({ error: 'invalid_json' });
     logger.error({ err, traceId: req.traceId }, 'unhandled error in api-gateway');
     return res.status(500).json({ error: 'internal_error', traceId: req.traceId });
   });

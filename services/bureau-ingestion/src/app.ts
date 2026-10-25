@@ -30,20 +30,29 @@ export function createApp(pool: Pool, adapters: BureauAdapter[] = createAdapters
 
   app.get('/healthz', (_req, res) => res.status(200).json({ status: 'ok' }));
 
-  app.use(requireInternalToken, requireActingUser, standardRateLimiter, express.json({ limit: '16kb' }));
+  app.use(
+    requireInternalToken,
+    requireActingUser,
+    standardRateLimiter,
+    express.json({ limit: '16kb' }),
+  );
 
   app.get(
     '/credit-profile',
     asyncHandler(async (req, res) => {
       const profile = await getCurrentProfile(pool, req.actingUserId!);
-      if (!profile) return res.status(404).json({ error: 'no_credit_profile', message: 'No credit profile yet. Refresh to fetch your reports.' });
+      if (!profile)
+        return res.status(404).json({
+          error: 'no_credit_profile',
+          message: 'No credit profile yet. Refresh to fetch your reports.',
+        });
       return res.json(profile);
-    })
+    }),
   );
 
   app.get(
     '/credit-profile/accounts',
-    asyncHandler(async (req, res) => res.json(await getCurrentAccounts(pool, req.actingUserId!)))
+    asyncHandler(async (req, res) => res.json(await getCurrentAccounts(pool, req.actingUserId!))),
   );
 
   app.post(
@@ -52,11 +61,12 @@ export function createApp(pool: Pool, adapters: BureauAdapter[] = createAdapters
       const result = await refreshCreditProfile(pool, req.actingUserId!, adapters);
       const profile = await getCurrentProfile(pool, req.actingUserId!);
       // 207 Multi-Status: refreshed, but at least one bureau failed.
-      return res.status(result.bureauFailures.length > 0 ? 207 : 200).json({ profile, bureauFailures: result.bureauFailures });
-    })
+      return res
+        .status(result.bureauFailures.length > 0 ? 207 : 200)
+        .json({ profile, bureauFailures: result.bureauFailures });
+    }),
   );
 
-   
   app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
     if (err instanceof RefreshRefusedError) {
       if (err.retryAfterSeconds) res.setHeader('Retry-After', String(err.retryAfterSeconds));

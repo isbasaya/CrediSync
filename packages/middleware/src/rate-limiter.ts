@@ -99,4 +99,8 @@ export function createRateLimiter(config: RateLimitConfig) {
 /** General traffic: 100 requests/minute per client across all routes. */
 export const standardRateLimiter = createRateLimiter({ windowMs: 60_000, maxRequests: 100 });
 /** Credential endpoints: 10 requests/minute per client per route. */
-export const strictRateLimiter = createRateLimiter({ windowMs: 60_000, maxRequests: 10, perRoute: true });
+export const strictRateLimiter = createRateLimiter({
+  windowMs: 60_000,
+  maxRequests: 10,
+  perRoute: true,
+});

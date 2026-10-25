@@ -59,12 +59,17 @@ export class ExperianAdapter implements BureauAdapter {
 
   constructor(
     private readonly baseUrl: string = process.env.EXPERIAN_API_BASE_URL ?? '',
-    private readonly apiKey: string = process.env.EXPERIAN_API_KEY ?? ''
+    private readonly apiKey: string = process.env.EXPERIAN_API_KEY ?? '',
   ) {}
 
   async fetchReport(request: BureauFetchRequest): Promise<NormalizedBureauReport> {
     if (!this.baseUrl || !this.apiKey) {
-      throw new BureauFetchError('experian', 'auth', 'missing EXPERIAN_API_BASE_URL/API_KEY', false);
+      throw new BureauFetchError(
+        'experian',
+        'auth',
+        'missing EXPERIAN_API_BASE_URL/API_KEY',
+        false,
+      );
     }
 
     let response: Response;
@@ -83,7 +88,12 @@ export class ExperianAdapter implements BureauAdapter {
       });
     } catch (err) {
       const isAbort = err instanceof Error && err.name === 'AbortError';
-      throw new BureauFetchError('experian', isAbort ? 'timeout' : 'upstream_error', String(err), true);
+      throw new BureauFetchError(
+        'experian',
+        isAbort ? 'timeout' : 'upstream_error',
+        String(err),
+        true,
+      );
     }
 
     if (response.status === 404) {
@@ -93,7 +103,12 @@ export class ExperianAdapter implements BureauAdapter {
       throw new BureauFetchError('experian', 'rate_limited', 'Experian API rate limit hit', true);
     }
     if (!response.ok) {
-      throw new BureauFetchError('experian', 'upstream_error', `HTTP ${response.status}`, response.status >= 500);
+      throw new BureauFetchError(
+        'experian',
+        'upstream_error',
+        `HTTP ${response.status}`,
+        response.status >= 500,
+      );
     }
 
     const raw = (await response.json()) as ExperianRawResponse;

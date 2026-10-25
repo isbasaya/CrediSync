@@ -33,7 +33,15 @@ function fakeScorer(received: unknown[]): http.RequestListener {
       }
       received.push(JSON.parse(body));
       res.setHeader('content-type', 'application/json');
-      res.end(JSON.stringify({ score: 61.5, tier: 'near_prime', breakdown: {}, top_reasons: [], model_version: 'test' }));
+      res.end(
+        JSON.stringify({
+          score: 61.5,
+          tier: 'near_prime',
+          breakdown: {},
+          top_reasons: [],
+          model_version: 'test',
+        }),
+      );
     });
   };
 }
@@ -91,20 +99,17 @@ describe.skipIf(!testDatabaseAvailable)('consumer and admin journey through the 
   const api = () => request(gateway);
 
   it('signs up and keeps tokens out of the browser response body', async () => {
-    const res = await api()
-      .post('/api/auth/signup')
-      .set('Origin', ORIGIN)
-      .send({
-        email: 'naledi@example.co.za',
-        password: 'a-long-enough-password',
-        firstName: 'Naledi',
-        lastName: 'Dlamini',
-        mobileNumber: '+27825550100',
-        saIdNumber: '8001015009087',
-        popiaConsent: true,
-        popiaPolicyVersion: CURRENT_POPIA_POLICY_VERSION,
-        creditCheckConsent: true,
-      });
+    const res = await api().post('/api/auth/signup').set('Origin', ORIGIN).send({
+      email: 'naledi@example.co.za',
+      password: 'a-long-enough-password',
+      firstName: 'Naledi',
+      lastName: 'Dlamini',
+      mobileNumber: '+27825550100',
+      saIdNumber: '8001015009087',
+      popiaConsent: true,
+      popiaPolicyVersion: CURRENT_POPIA_POLICY_VERSION,
+      creditCheckConsent: true,
+    });
     expect(res.status).toBe(201);
     expect(res.body.accessToken).toBeUndefined();
     const setCookie = (res.headers['set-cookie'] as unknown as string[]).join('\n');
@@ -114,12 +119,18 @@ describe.skipIf(!testDatabaseAvailable)('consumer and admin journey through the 
   });
 
   it('rejects cookie-authenticated writes from another origin (CSRF)', async () => {
-    const res = await api().post('/api/credit-profile/refresh').set('Cookie', cookies).set('Origin', 'https://evil.example');
+    const res = await api()
+      .post('/api/credit-profile/refresh')
+      .set('Cookie', cookies)
+      .set('Origin', 'https://evil.example');
     expect(res.status).toBe(403);
   });
 
   it('blocks bureau pulls until the email is verified', async () => {
-    const res = await api().post('/api/credit-profile/refresh').set('Cookie', cookies).set('Origin', ORIGIN);
+    const res = await api()
+      .post('/api/credit-profile/refresh')
+      .set('Cookie', cookies)
+      .set('Origin', ORIGIN);
     expect(res.status).toBe(403);
     expect(res.body.error).toBe('email_not_verified');
   });
@@ -133,7 +144,10 @@ describe.skipIf(!testDatabaseAvailable)('consumer and admin journey through the 
   });
 
   it('refreshes bureau data and shows only the signed-in user their own profile', async () => {
-    const refresh = await api().post('/api/credit-profile/refresh').set('Cookie', cookies).set('Origin', ORIGIN);
+    const refresh = await api()
+      .post('/api/credit-profile/refresh')
+      .set('Cookie', cookies)
+      .set('Origin', ORIGIN);
     expect(refresh.status).toBe(200);
     expect(refresh.body.profile.totalAccounts).toBe(3);
 
@@ -149,29 +163,33 @@ describe.skipIf(!testDatabaseAvailable)('consumer and admin journey through the 
       .post('/api/disputes')
       .set('Cookie', cookies)
       .set('Origin', ORIGIN)
-      .send({ bureauAccountId: retail.reportedBy[0].accountId, reason: 'settled_in_full_not_updated', description: 'I settled this account in full during March 2024.' });
+      .send({
+        bureauAccountId: retail.reportedBy[0].accountId,
+        reason: 'settled_in_full_not_updated',
+        description: 'I settled this account in full during March 2024.',
+      });
     expect(create.status).toBe(201);
 
-    const submit = await api().post(`/api/disputes/${create.body.id}/submit`).set('Cookie', cookies).set('Origin', ORIGIN);
+    const submit = await api()
+      .post(`/api/disputes/${create.body.id}/submit`)
+      .set('Cookie', cookies)
+      .set('Origin', ORIGIN);
     expect(submit.status).toBe(200);
     expect(submit.body.status).toBe('submitted');
   });
 
   it("a second user cannot touch the first user's data", async () => {
-    const signup = await api()
-      .post('/api/auth/signup')
-      .set('X-Client', 'mobile')
-      .send({
-        email: 'sipho@example.co.za',
-        password: 'another-long-password',
-        firstName: 'Sipho',
-        lastName: 'Mokoena',
-        mobileNumber: '+27825550101',
-        saIdNumber: '9202204720083',
-        popiaConsent: true,
-        popiaPolicyVersion: CURRENT_POPIA_POLICY_VERSION,
-        creditCheckConsent: true,
-      });
+    const signup = await api().post('/api/auth/signup').set('X-Client', 'mobile').send({
+      email: 'sipho@example.co.za',
+      password: 'another-long-password',
+      firstName: 'Sipho',
+      lastName: 'Mokoena',
+      mobileNumber: '+27825550101',
+      saIdNumber: '9202204720083',
+      popiaConsent: true,
+      popiaPolicyVersion: CURRENT_POPIA_POLICY_VERSION,
+      creditCheckConsent: true,
+    });
     expect(signup.status).toBe(201);
     mobileToken = signup.body.accessToken;
     expect(mobileToken).toBeTruthy(); // native clients receive tokens
@@ -181,22 +199,36 @@ describe.skipIf(!testDatabaseAvailable)('consumer and admin journey through the 
 
     const bearer = { Authorization: `Bearer ${mobileToken}` };
     expect((await api().get(`/api/disputes/${disputeId}`).set(bearer)).status).toBe(404);
-    expect((await api().post(`/api/disputes/${disputeId}/escalate`).set(bearer).send({ caseNumber: 'X' })).status).toBe(404);
+    expect(
+      (
+        await api()
+          .post(`/api/disputes/${disputeId}/escalate`)
+          .set(bearer)
+          .send({ caseNumber: 'X' })
+      ).status,
+    ).toBe(404);
     expect((await api().get('/api/credit-profile/accounts').set(bearer)).body).toEqual([]);
   });
 
   it('keeps the admin API for staff only and audits staff access', async () => {
     expect((await api().get('/api/admin/users').set('Cookie', cookies)).status).toBe(403);
 
-    await db.adminPool.query("UPDATE credisync.users SET role = 'admin' WHERE email = 'sipho@example.co.za'");
-    const login = await api().post('/api/auth/login').set('X-Client', 'mobile').send({ email: 'sipho@example.co.za', password: 'another-long-password' });
+    await db.adminPool.query(
+      "UPDATE credisync.users SET role = 'admin' WHERE email = 'sipho@example.co.za'",
+    );
+    const login = await api()
+      .post('/api/auth/login')
+      .set('X-Client', 'mobile')
+      .send({ email: 'sipho@example.co.za', password: 'another-long-password' });
     const adminBearer = { Authorization: `Bearer ${login.body.accessToken}` };
 
     const users = await api().get('/api/admin/users?q=%25').set(adminBearer);
     expect(users.status).toBe(200);
     expect(users.body.users).toHaveLength(0); // '%' is escaped, not a wildcard
 
-    const audit = await db.adminPool.query("SELECT count(*)::int AS n FROM credisync.regulatory_audit_logs WHERE event_type = 'admin_access'");
+    const audit = await db.adminPool.query(
+      "SELECT count(*)::int AS n FROM credisync.regulatory_audit_logs WHERE event_type = 'admin_access'",
+    );
     expect(audit.rows[0].n).toBeGreaterThan(0);
   });
 
@@ -216,9 +248,15 @@ describe.skipIf(!testDatabaseAvailable)('consumer and admin journey through the 
   });
 
   it('logs out and revokes the session', async () => {
-    const logout = await api().post('/api/auth/logout').set('Cookie', cookies).set('Origin', ORIGIN);
+    const logout = await api()
+      .post('/api/auth/logout')
+      .set('Cookie', cookies)
+      .set('Origin', ORIGIN);
     expect(logout.status).toBe(204);
-    const refresh = await api().post('/api/auth/refresh').set('Cookie', cookies).set('Origin', ORIGIN);
+    const refresh = await api()
+      .post('/api/auth/refresh')
+      .set('Cookie', cookies)
+      .set('Origin', ORIGIN);
     expect(refresh.status).toBe(401);
   });
 });

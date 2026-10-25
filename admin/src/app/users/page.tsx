@@ -97,7 +97,11 @@ function UsersPageInner() {
             </form>
 
             {loading ? (
-              <Table columns={['Name', 'Email', 'Status', 'Verified', 'Joined']} rows={[]} loading />
+              <Table
+                columns={['Name', 'Email', 'Status', 'Verified', 'Joined']}
+                rows={[]}
+                loading
+              />
             ) : data && data.users.length > 0 ? (
               <>
                 <Table

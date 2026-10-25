@@ -24,7 +24,7 @@ export async function runRetention(pool: Pool): Promise<Record<string, number>> 
   const results = await withSystem(pool, async (client) => {
     const tx = await client.query(
       `DELETE FROM credisync.transactions WHERE transaction_date < (CURRENT_DATE - make_interval(months => $1))`,
-      [RETENTION.transactionMonths]
+      [RETENTION.transactionMonths],
     );
     const profiles = await client.query(
       `DELETE FROM credisync.credit_profiles cp
@@ -35,19 +35,21 @@ export async function runRetention(pool: Pool): Promise<Record<string, number>> 
            JOIN credisync.bureau_accounts ba ON ba.id = d.bureau_account_id
            WHERE ba.credit_profile_id = cp.id
          )`,
-      [RETENTION.supersededProfileMonths]
+      [RETENTION.supersededProfileMonths],
     );
     const sessions = await client.query(
-      `DELETE FROM credisync.user_sessions WHERE expires_at < NOW() - INTERVAL '7 days' OR revoked_at < NOW() - INTERVAL '30 days'`
+      `DELETE FROM credisync.user_sessions WHERE expires_at < NOW() - INTERVAL '7 days' OR revoked_at < NOW() - INTERVAL '30 days'`,
     );
-    const tokens = await client.query(`DELETE FROM credisync.email_verification_tokens WHERE expires_at < NOW() - INTERVAL '7 days'`);
+    const tokens = await client.query(
+      `DELETE FROM credisync.email_verification_tokens WHERE expires_at < NOW() - INTERVAL '7 days'`,
+    );
 
     // The append-only trigger allows deleting audit rows only past the
     // 5-year floor and only when this setting is on for the transaction.
     await client.query("SELECT set_config('app.audit_retention_purge', 'on', true)");
     const audit = await client.query(
       `DELETE FROM credisync.regulatory_audit_logs WHERE created_at < NOW() - make_interval(years => $1)`,
-      [RETENTION.auditLogYears]
+      [RETENTION.auditLogYears],
     );
 
     return {
@@ -68,11 +70,20 @@ export async function runPartitionMaintenance(pool: Pool, now = new Date()): Pro
   const created = await withSystem(pool, async (client) => {
     const names: string[] = [];
     for (const y of [year, year + 1, year + 2]) {
-      const r = await client.query<{ name: string }>('SELECT credisync.ensure_transactions_partition($1) AS name', [y]);
+      const r = await client.query<{ name: string }>(
+        'SELECT credisync.ensure_transactions_partition($1) AS name',
+        [y],
+      );
       names.push(r.rows[0]!.name);
     }
-    const stray = await client.query<{ n: number }>('SELECT count(*)::int AS n FROM credisync.transactions_default');
-    if ((stray.rows[0]?.n ?? 0) > 0) logger.warn({ rows: stray.rows[0]!.n }, 'rows in transactions_default; add a partition for their years');
+    const stray = await client.query<{ n: number }>(
+      'SELECT count(*)::int AS n FROM credisync.transactions_default',
+    );
+    if ((stray.rows[0]?.n ?? 0) > 0)
+      logger.warn(
+        { rows: stray.rows[0]!.n },
+        'rows in transactions_default; add a partition for their years',
+      );
     return names;
   });
   logger.info({ partitions: created }, 'partition maintenance complete');
@@ -82,14 +93,20 @@ export async function runPartitionMaintenance(pool: Pool, now = new Date()): Pro
 /** Flags disputes whose bureau response deadline (SAST calendar) has passed, and tells the consumer. */
 export async function runDisputeDeadlineMonitor(pool: Pool): Promise<number> {
   const breached = await withSystem(pool, async (client) => {
-    const r = await client.query<{ id: string; user_id: string; email: string; bureau: string; resolution_deadline: string }>(
+    const r = await client.query<{
+      id: string;
+      user_id: string;
+      email: string;
+      bureau: string;
+      resolution_deadline: string;
+    }>(
       `UPDATE credisync.disputes d SET deadline_breached_at = NOW()
        FROM credisync.users u
        WHERE u.id = d.user_id
          AND d.status IN ('submitted', 'under_review')
          AND d.deadline_breached_at IS NULL
          AND d.resolution_deadline < (NOW() AT TIME ZONE 'Africa/Johannesburg')::date
-       RETURNING d.id, d.user_id, u.email, d.bureau, to_char(d.resolution_deadline, 'YYYY-MM-DD') AS resolution_deadline`
+       RETURNING d.id, d.user_id, u.email, d.bureau, to_char(d.resolution_deadline, 'YYYY-MM-DD') AS resolution_deadline`,
     );
     for (const row of r.rows) {
       await writeAudit(client, {
@@ -120,7 +137,7 @@ export async function runDeletionRequests(pool: Pool): Promise<number> {
     const r = await client.query<{ id: string; user_id: string }>(
       `SELECT id, user_id FROM credisync.data_deletion_requests
        WHERE completed_at IS NULL AND cancelled_at IS NULL AND scheduled_for <= NOW()
-       ORDER BY scheduled_for LIMIT 100`
+       ORDER BY scheduled_for LIMIT 100`,
     );
     return r.rows;
   });
@@ -132,7 +149,10 @@ export async function runDeletionRequests(pool: Pool): Promise<number> {
       await deleteUserFiles(request.user_id);
       await withSystem(pool, async (client) => {
         await client.query('DELETE FROM credisync.users WHERE id = $1', [request.user_id]);
-        await client.query('UPDATE credisync.data_deletion_requests SET completed_at = NOW() WHERE id = $1', [request.id]);
+        await client.query(
+          'UPDATE credisync.data_deletion_requests SET completed_at = NOW() WHERE id = $1',
+          [request.id],
+        );
         await writeAudit(client, {
           userId: request.user_id,
           eventType: 'data_deletion_completed',

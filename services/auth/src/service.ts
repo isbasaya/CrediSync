@@ -46,7 +46,7 @@ export class AuthError extends Error {
   constructor(
     public readonly code: string,
     message: string,
-    public readonly statusCode: number = 400
+    public readonly statusCode: number = 400,
   ) {
     super(message);
     this.name = 'AuthError';
@@ -77,7 +77,8 @@ export function normaliseEmail(email: string): string {
 
 /** bcrypt silently ignores bytes past 72, so longer passwords would be truncated. */
 export function assertPasswordPolicy(password: string): void {
-  if (password.length < 10) throw new AuthError('weak_password', 'Password must be at least 10 characters', 400);
+  if (password.length < 10)
+    throw new AuthError('weak_password', 'Password must be at least 10 characters', 400);
   if (Buffer.byteLength(password, 'utf-8') > 72) {
     throw new AuthError('password_too_long', 'Password must be at most 72 bytes', 400);
   }
@@ -96,10 +97,18 @@ export interface SignupInput {
   marketingConsent?: boolean;
 }
 
-export async function signup(pool: Pool, input: SignupInput, meta: RequestMeta = {}): Promise<AuthResult> {
+export async function signup(
+  pool: Pool,
+  input: SignupInput,
+  meta: RequestMeta = {},
+): Promise<AuthResult> {
   assertPasswordPolicy(input.password);
   if (input.popiaPolicyVersion !== CURRENT_POPIA_POLICY_VERSION) {
-    throw new AuthError('stale_policy_version', 'Please review the current privacy notice and accept it again', 409);
+    throw new AuthError(
+      'stale_policy_version',
+      'Please review the current privacy notice and accept it again',
+      409,
+    );
   }
 
   const saId = normaliseSaIdNumber(input.saIdNumber);
@@ -110,7 +119,10 @@ export async function signup(pool: Pool, input: SignupInput, meta: RequestMeta =
 
   const email = normaliseEmail(input.email);
   const saIdHash = hmacLookup(saId);
-  const [passwordHash, saIdEncrypted] = await Promise.all([bcrypt.hash(input.password, BCRYPT_ROUNDS), encryptToBytes(saId)]);
+  const [passwordHash, saIdEncrypted] = await Promise.all([
+    bcrypt.hash(input.password, BCRYPT_ROUNDS),
+    encryptToBytes(saId),
+  ]);
   const id = randomUUID();
 
   const verificationToken = randomToken();
@@ -118,11 +130,15 @@ export async function signup(pool: Pool, input: SignupInput, meta: RequestMeta =
   const user = await withSystem(pool, async (client) => {
     const existing = await client.query(
       'SELECT 1 FROM credisync.users WHERE email = $1 OR sa_id_hash = $2 LIMIT 1',
-      [email, saIdHash]
+      [email, saIdHash],
     );
     if (existing.rowCount) {
       // One generic message for email or ID collisions.
-      throw new AuthError('account_exists', 'An account already exists for these details. Try signing in.', 409);
+      throw new AuthError(
+        'account_exists',
+        'An account already exists for these details. Try signing in.',
+        409,
+      );
     }
 
     try {
@@ -143,16 +159,23 @@ export async function signup(pool: Pool, input: SignupInput, meta: RequestMeta =
           input.popiaPolicyVersion,
           input.creditCheckConsent,
           input.marketingConsent ?? false,
-        ]
+        ],
       );
     } catch (err) {
       if ((err as { code?: string }).code === '23505') {
-        throw new AuthError('account_exists', 'An account already exists for these details. Try signing in.', 409);
+        throw new AuthError(
+          'account_exists',
+          'An account already exists for these details. Try signing in.',
+          409,
+        );
       }
       throw err;
     }
 
-    await client.query('INSERT INTO credisync.user_passwords (user_id, password_hash) VALUES ($1, $2)', [id, passwordHash]);
+    await client.query(
+      'INSERT INTO credisync.user_passwords (user_id, password_hash) VALUES ($1, $2)',
+      [id, passwordHash],
+    );
 
     const consents: Array<[string, boolean]> = [
       ['popia', true],
@@ -163,14 +186,14 @@ export async function signup(pool: Pool, input: SignupInput, meta: RequestMeta =
       await client.query(
         `INSERT INTO credisync.popia_consent_audit (user_id, consent_type, previous_value, new_value, policy_version, ip_address, user_agent)
          VALUES ($1, $2, NULL, $3, $4, $5::inet, $6)`,
-        [id, type, value, input.popiaPolicyVersion, meta.ip ?? null, meta.userAgent ?? null]
+        [id, type, value, input.popiaPolicyVersion, meta.ip ?? null, meta.userAgent ?? null],
       );
     }
 
     await client.query(
       `INSERT INTO credisync.email_verification_tokens (token_hash, user_id, expires_at)
        VALUES ($1, $2, NOW() + make_interval(hours => $3))`,
-      [sha256Hex(verificationToken), id, VERIFICATION_TTL_HOURS]
+      [sha256Hex(verificationToken), id, VERIFICATION_TTL_HOURS],
     );
 
     await writeAudit(client, {
@@ -178,12 +201,17 @@ export async function signup(pool: Pool, input: SignupInput, meta: RequestMeta =
       eventType: 'user_registered',
       resourceType: 'user',
       resourceId: id,
-      payload: { policy_version: input.popiaPolicyVersion, credit_check_consent: input.creditCheckConsent },
+      payload: {
+        policy_version: input.popiaPolicyVersion,
+        credit_check_consent: input.creditCheckConsent,
+      },
       ipAddress: meta.ip,
       userAgent: meta.userAgent,
     });
 
-    const row = await client.query(`SELECT ${USER_COLUMNS} FROM credisync.users WHERE id = $1`, [id]);
+    const row = await client.query(`SELECT ${USER_COLUMNS} FROM credisync.users WHERE id = $1`, [
+      id,
+    ]);
     return toPublicUser(row.rows[0]!);
   });
 
@@ -204,10 +232,15 @@ async function sendVerificationEmail(email: string, token: string): Promise<void
 const GENERIC_LOGIN_FAILURE = new AuthError(
   'invalid_credentials',
   'Invalid email or password, or the account is temporarily locked',
-  401
+  401,
 );
 
-export async function login(pool: Pool, emailInput: string, password: string, meta: RequestMeta = {}): Promise<AuthResult> {
+export async function login(
+  pool: Pool,
+  emailInput: string,
+  password: string,
+  meta: RequestMeta = {},
+): Promise<AuthResult> {
   const email = normaliseEmail(emailInput);
 
   const outcome = await withSystem(pool, async (client) => {
@@ -216,7 +249,7 @@ export async function login(pool: Pool, emailInput: string, password: string, me
        FROM credisync.users u
        LEFT JOIN credisync.user_passwords p ON p.user_id = u.id
        WHERE u.email = $1`,
-      [email]
+      [email],
     );
     const row = result.rows[0];
 
@@ -229,17 +262,26 @@ export async function login(pool: Pool, emailInput: string, password: string, me
     const locked = row.locked_until && new Date(row.locked_until).getTime() > Date.now();
     if (locked || !row.is_active || !row.password_hash || !passwordOk) {
       if (!locked && row.is_active) {
-        const updated = await client.query<{ failed_login_attempts: number; locked_until: Date | null }>(
+        const updated = await client.query<{
+          failed_login_attempts: number;
+          locked_until: Date | null;
+        }>(
           `UPDATE credisync.users
              SET failed_login_attempts = failed_login_attempts + 1,
                  locked_until = CASE WHEN failed_login_attempts + 1 >= $2
                                      THEN NOW() + make_interval(mins => $3) ELSE locked_until END
            WHERE id = $1
            RETURNING failed_login_attempts, locked_until`,
-          [row.id, MAX_FAILED_ATTEMPTS, LOCKOUT_MINUTES]
+          [row.id, MAX_FAILED_ATTEMPTS, LOCKOUT_MINUTES],
         );
         if (updated.rows[0]?.locked_until) {
-          await writeAudit(client, { userId: row.id, eventType: 'account_locked', resourceType: 'user', resourceId: row.id, ipAddress: meta.ip });
+          await writeAudit(client, {
+            userId: row.id,
+            eventType: 'account_locked',
+            resourceType: 'user',
+            resourceId: row.id,
+            ipAddress: meta.ip,
+          });
         }
       }
       await writeAudit(client, {
@@ -257,7 +299,7 @@ export async function login(pool: Pool, emailInput: string, password: string, me
 
     await client.query(
       'UPDATE credisync.users SET failed_login_attempts = 0, locked_until = NULL, last_login_at = NOW() WHERE id = $1',
-      [row.id]
+      [row.id],
     );
     await writeAudit(client, {
       userId: row.id,
@@ -277,21 +319,40 @@ export async function login(pool: Pool, emailInput: string, password: string, me
 }
 
 function accessTokenFor(user: PublicUser): string {
-  return signAccessToken({ sub: user.id, email: user.email, role: user.role, verified: user.is_verified });
+  return signAccessToken({
+    sub: user.id,
+    email: user.email,
+    role: user.role,
+    verified: user.is_verified,
+  });
 }
 
-async function insertSession(client: PoolClient, userId: string, familyId: string, meta: RequestMeta): Promise<string> {
+async function insertSession(
+  client: PoolClient,
+  userId: string,
+  familyId: string,
+  meta: RequestMeta,
+): Promise<string> {
   const refreshToken = randomToken(48);
   await client.query(
     `INSERT INTO credisync.user_sessions (user_id, family_id, refresh_token_hash, user_agent, ip_address, expires_at)
      VALUES ($1, $2, $3, $4, $5::inet, NOW() + make_interval(days => $6))`,
-    [userId, familyId, sha256Hex(refreshToken), meta.userAgent ?? null, meta.ip ?? null, REFRESH_TOKEN_TTL_DAYS]
+    [
+      userId,
+      familyId,
+      sha256Hex(refreshToken),
+      meta.userAgent ?? null,
+      meta.ip ?? null,
+      REFRESH_TOKEN_TTL_DAYS,
+    ],
   );
   return refreshToken;
 }
 
 async function issueSession(pool: Pool, user: PublicUser, meta: RequestMeta): Promise<AuthTokens> {
-  const refreshToken = await withSystem(pool, (client) => insertSession(client, user.id, randomUUID(), meta));
+  const refreshToken = await withSystem(pool, (client) =>
+    insertSession(client, user.id, randomUUID(), meta),
+  );
   return { accessToken: accessTokenFor(user), refreshToken, expiresIn: ACCESS_TOKEN_TTL_SECONDS };
 }
 
@@ -299,7 +360,11 @@ async function issueSession(pool: Pool, user: PublicUser, meta: RequestMeta): Pr
  * Rotates a refresh token. Presenting an already-rotated token means it was
  * stolen or replayed, so the whole session family is revoked.
  */
-export async function refresh(pool: Pool, refreshToken: string, meta: RequestMeta = {}): Promise<AuthResult> {
+export async function refresh(
+  pool: Pool,
+  refreshToken: string,
+  meta: RequestMeta = {},
+): Promise<AuthResult> {
   const result = await withSystem(pool, async (client) => {
     const found = await client.query(
       `SELECT s.id AS session_id, s.family_id, s.user_id, s.expires_at, s.rotated_at, s.revoked_at,
@@ -307,38 +372,60 @@ export async function refresh(pool: Pool, refreshToken: string, meta: RequestMet
        FROM credisync.user_sessions s JOIN credisync.users u ON u.id = s.user_id
        WHERE s.refresh_token_hash = $1
        FOR UPDATE OF s`,
-      [sha256Hex(refreshToken)]
+      [sha256Hex(refreshToken)],
     );
     const s = found.rows[0];
     if (!s) return null;
 
     if (s.rotated_at || s.revoked_at) {
-      await client.query('UPDATE credisync.user_sessions SET revoked_at = NOW() WHERE family_id = $1 AND revoked_at IS NULL', [
-        s.family_id,
-      ]);
+      await client.query(
+        'UPDATE credisync.user_sessions SET revoked_at = NOW() WHERE family_id = $1 AND revoked_at IS NULL',
+        [s.family_id],
+      );
       return null;
     }
     if (new Date(s.expires_at).getTime() <= Date.now() || !s.is_active) return null;
 
-    await client.query('UPDATE credisync.user_sessions SET rotated_at = NOW() WHERE id = $1', [s.session_id]);
+    await client.query('UPDATE credisync.user_sessions SET rotated_at = NOW() WHERE id = $1', [
+      s.session_id,
+    ]);
     const next = await insertSession(client, s.user_id, s.family_id, meta);
     return { user: toPublicUser({ ...s, id: s.user_id }), refreshToken: next };
   });
 
-  if (!result) throw new AuthError('invalid_refresh_token', 'Session expired. Please sign in again.', 401);
-  return { user: result.user, accessToken: accessTokenFor(result.user), refreshToken: result.refreshToken, expiresIn: ACCESS_TOKEN_TTL_SECONDS };
+  if (!result)
+    throw new AuthError('invalid_refresh_token', 'Session expired. Please sign in again.', 401);
+  return {
+    user: result.user,
+    accessToken: accessTokenFor(result.user),
+    refreshToken: result.refreshToken,
+    expiresIn: ACCESS_TOKEN_TTL_SECONDS,
+  };
 }
 
-export async function logout(pool: Pool, refreshToken: string, meta: RequestMeta = {}): Promise<void> {
+export async function logout(
+  pool: Pool,
+  refreshToken: string,
+  meta: RequestMeta = {},
+): Promise<void> {
   await withSystem(pool, async (client) => {
     const found = await client.query<{ family_id: string; user_id: string }>(
       'SELECT family_id, user_id FROM credisync.user_sessions WHERE refresh_token_hash = $1',
-      [sha256Hex(refreshToken)]
+      [sha256Hex(refreshToken)],
     );
     const s = found.rows[0];
     if (!s) return;
-    await client.query('UPDATE credisync.user_sessions SET revoked_at = NOW() WHERE family_id = $1 AND revoked_at IS NULL', [s.family_id]);
-    await writeAudit(client, { userId: s.user_id, eventType: 'user_logout', resourceType: 'user', resourceId: s.user_id, ipAddress: meta.ip });
+    await client.query(
+      'UPDATE credisync.user_sessions SET revoked_at = NOW() WHERE family_id = $1 AND revoked_at IS NULL',
+      [s.family_id],
+    );
+    await writeAudit(client, {
+      userId: s.user_id,
+      eventType: 'user_logout',
+      resourceType: 'user',
+      resourceId: s.user_id,
+      ipAddress: meta.ip,
+    });
   });
 }
 
@@ -348,15 +435,20 @@ export async function verifyEmail(pool: Pool, token: string): Promise<AuthResult
       `UPDATE credisync.email_verification_tokens SET used_at = NOW()
        WHERE token_hash = $1 AND used_at IS NULL AND expires_at > NOW()
        RETURNING user_id`,
-      [sha256Hex(token)]
+      [sha256Hex(token)],
     );
     const userId = found.rows[0]?.user_id;
     if (!userId) return null;
     const updated = await client.query(
       `UPDATE credisync.users SET is_verified = TRUE, email_verified_at = NOW() WHERE id = $1 RETURNING ${USER_COLUMNS}`,
-      [userId]
+      [userId],
     );
-    await writeAudit(client, { userId, eventType: 'email_verified', resourceType: 'user', resourceId: userId });
+    await writeAudit(client, {
+      userId,
+      eventType: 'email_verified',
+      resourceType: 'user',
+      resourceId: userId,
+    });
     return toPublicUser(updated.rows[0]!);
   });
   if (!user) return null;
@@ -387,7 +479,7 @@ export async function getProfile(pool: Pool, userId: string): Promise<ProfileVie
                 WHERE d.user_id = users.id AND d.completed_at IS NULL AND d.cancelled_at IS NULL
                 ORDER BY requested_at DESC LIMIT 1) AS deletion_scheduled_for
        FROM credisync.users WHERE id = $1`,
-      [userId]
+      [userId],
     );
     const row = r.rows[0];
     if (!row) return null;
@@ -403,7 +495,9 @@ export async function getProfile(pool: Pool, userId: string): Promise<ProfileVie
         thirdPartySharing: row.third_party_sharing,
       },
       currentPolicyVersion: CURRENT_POPIA_POLICY_VERSION,
-      deletionScheduledFor: row.deletion_scheduled_for ? new Date(row.deletion_scheduled_for).toISOString() : null,
+      deletionScheduledFor: row.deletion_scheduled_for
+        ? new Date(row.deletion_scheduled_for).toISOString()
+        : null,
     };
   });
 }
@@ -421,34 +515,47 @@ export async function updateConsents(
   pool: Pool,
   userId: string,
   changes: Partial<Record<ConsentKey, boolean>>,
-  meta: RequestMeta = {}
+  meta: RequestMeta = {},
 ): Promise<void> {
   await withUser(pool, userId, async (client) => {
     const current = await client.query(
       'SELECT credit_check_consent, open_banking_consent, marketing_consent, third_party_sharing FROM credisync.users WHERE id = $1 FOR UPDATE',
-      [userId]
+      [userId],
     );
     const row = current.rows[0];
     if (!row) throw new AuthError('not_found', 'User not found', 404);
 
-    for (const [key, value] of Object.entries(changes) as Array<[ConsentKey, boolean | undefined]>) {
+    for (const [key, value] of Object.entries(changes) as Array<
+      [ConsentKey, boolean | undefined]
+    >) {
       if (value === undefined) continue;
       const { column, type } = CONSENT_COLUMNS[key];
       const previous = row[column] as boolean;
       if (previous === value) continue;
 
       // Column names come from the fixed CONSENT_COLUMNS map, never from input.
-      await client.query(`UPDATE credisync.users SET ${column} = $2 WHERE id = $1`, [userId, value]);
+      await client.query(`UPDATE credisync.users SET ${column} = $2 WHERE id = $1`, [
+        userId,
+        value,
+      ]);
       await client.query(
         `INSERT INTO credisync.popia_consent_audit (user_id, consent_type, previous_value, new_value, policy_version, ip_address, user_agent)
          VALUES ($1, $2, $3, $4, $5, $6::inet, $7)`,
-        [userId, type, previous, value, CURRENT_POPIA_POLICY_VERSION, meta.ip ?? null, meta.userAgent ?? null]
+        [
+          userId,
+          type,
+          previous,
+          value,
+          CURRENT_POPIA_POLICY_VERSION,
+          meta.ip ?? null,
+          meta.userAgent ?? null,
+        ],
       );
       if (key === 'openBanking' && !value) {
         // Revoking open-banking consent also destroys stored provider tokens.
         await client.query(
           'UPDATE credisync.open_banking_links SET token_encrypted = NULL, revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL',
-          [userId]
+          [userId],
         );
       }
       await writeAudit(client, {
@@ -464,19 +571,23 @@ export async function updateConsents(
 }
 
 /** POPIA s24: schedule erasure after a short grace period, and revoke all sessions now. */
-export async function requestDeletion(pool: Pool, userId: string, meta: RequestMeta = {}): Promise<{ scheduledFor: string }> {
+export async function requestDeletion(
+  pool: Pool,
+  userId: string,
+  meta: RequestMeta = {},
+): Promise<{ scheduledFor: string }> {
   const scheduledFor = await withUser(pool, userId, async (client) => {
     const existing = await client.query<{ scheduled_for: Date }>(
       `SELECT scheduled_for FROM credisync.data_deletion_requests
        WHERE user_id = $1 AND completed_at IS NULL AND cancelled_at IS NULL`,
-      [userId]
+      [userId],
     );
     if (existing.rows[0]) return existing.rows[0].scheduled_for;
 
     const inserted = await client.query<{ scheduled_for: Date }>(
       `INSERT INTO credisync.data_deletion_requests (user_id, scheduled_for)
        VALUES ($1, NOW() + make_interval(days => $2)) RETURNING scheduled_for`,
-      [userId, DELETION_GRACE_DAYS]
+      [userId, DELETION_GRACE_DAYS],
     );
     await writeAudit(client, {
       userId,
@@ -496,13 +607,17 @@ export async function cancelDeletion(pool: Pool, userId: string): Promise<void> 
     client.query(
       `UPDATE credisync.data_deletion_requests SET cancelled_at = NOW()
        WHERE user_id = $1 AND completed_at IS NULL AND cancelled_at IS NULL`,
-      [userId]
-    )
+      [userId],
+    ),
   );
 }
 
 /** POPIA s23: everything we hold about the data subject, in machine-readable form. */
-export async function exportPersonalData(pool: Pool, userId: string, meta: RequestMeta = {}): Promise<Record<string, unknown>> {
+export async function exportPersonalData(
+  pool: Pool,
+  userId: string,
+  meta: RequestMeta = {},
+): Promise<Record<string, unknown>> {
   return withUser(pool, userId, async (client) => {
     const q = async (sql: string) => (await client.query(sql, [userId])).rows;
     const [user, profiles, accounts, snapshots, disputes, consents, links] = await Promise.all([
@@ -511,12 +626,24 @@ export async function exportPersonalData(pool: Pool, userId: string, meta: Reque
                 open_banking_consent, created_at, last_login_at FROM credisync.users WHERE id = $1`),
       q('SELECT * FROM credisync.credit_profiles WHERE user_id = $1 ORDER BY created_at DESC'),
       q('SELECT * FROM credisync.bureau_accounts WHERE user_id = $1 ORDER BY created_at DESC'),
-      q('SELECT * FROM credisync.financial_health_snapshots WHERE user_id = $1 ORDER BY period_end DESC'),
+      q(
+        'SELECT * FROM credisync.financial_health_snapshots WHERE user_id = $1 ORDER BY period_end DESC',
+      ),
       q('SELECT * FROM credisync.disputes WHERE user_id = $1 ORDER BY created_at DESC'),
-      q('SELECT consent_type, previous_value, new_value, policy_version, created_at FROM credisync.popia_consent_audit WHERE user_id = $1 ORDER BY created_at'),
-      q('SELECT id, source, created_at, revoked_at FROM credisync.open_banking_links WHERE user_id = $1'),
+      q(
+        'SELECT consent_type, previous_value, new_value, policy_version, created_at FROM credisync.popia_consent_audit WHERE user_id = $1 ORDER BY created_at',
+      ),
+      q(
+        'SELECT id, source, created_at, revoked_at FROM credisync.open_banking_links WHERE user_id = $1',
+      ),
     ]);
-    await writeAudit(client, { userId, eventType: 'data_export', resourceType: 'user', resourceId: userId, ipAddress: meta.ip });
+    await writeAudit(client, {
+      userId,
+      eventType: 'data_export',
+      resourceType: 'user',
+      resourceId: userId,
+      ipAddress: meta.ip,
+    });
     return {
       exportedAt: new Date().toISOString(),
       note: 'Your SA ID number is stored encrypted and is not included in exports. Contact support to confirm it.',

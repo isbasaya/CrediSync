@@ -46,7 +46,15 @@ const COLUMNS = ['ID', 'Account', 'Reason', 'Status', 'Created', 'Deadline', 'Bu
  * lodging, and the bureau's response when it arrives. Every action is
  * attributed to the signed-in staff member in the audit log.
  */
-function DisputeUpdatePanel({ dispute, onClose, onSaved }: { dispute: Dispute; onClose: () => void; onSaved: () => void }) {
+function DisputeUpdatePanel({
+  dispute,
+  onClose,
+  onSaved,
+}: {
+  dispute: Dispute;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const [reference, setReference] = useState(dispute.bureau_reference ?? '');
   const [response, setResponse] = useState('');
   const [resolution, setResolution] = useState<'' | 'upheld' | 'rejected'>('');
@@ -70,19 +78,32 @@ function DisputeUpdatePanel({ dispute, onClose, onSaved }: { dispute: Dispute; o
     'w-full rounded-lg border border-border-default bg-bg-surface px-3 py-2 text-sm text-text-primary focus:border-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-700/20';
 
   return (
-    <Card title={`Update dispute ${dispute.id.slice(0, 8)} · ${dispute.creditor_name} (${dispute.bureau})`}>
+    <Card
+      title={`Update dispute ${dispute.id.slice(0, 8)} · ${dispute.creditor_name} (${dispute.bureau})`}
+    >
       <div className="grid gap-6 lg:grid-cols-2">
         <form
           className="space-y-3"
           onSubmit={(e) => {
             e.preventDefault();
-            void run(() => api.post(`/admin/disputes/${dispute.id}/bureau-reference`, { bureauReference: reference }));
+            void run(() =>
+              api.post(`/admin/disputes/${dispute.id}/bureau-reference`, {
+                bureauReference: reference,
+              }),
+            );
           }}
         >
           <label htmlFor="ref" className="block text-sm font-medium text-text-primary">
             Bureau reference number
           </label>
-          <input id="ref" value={reference} onChange={(e) => setReference(e.target.value)} className={input} required maxLength={100} />
+          <input
+            id="ref"
+            value={reference}
+            onChange={(e) => setReference(e.target.value)}
+            className={input}
+            required
+            maxLength={100}
+          />
           <button
             type="submit"
             disabled={busy || !reference.trim()}
@@ -101,18 +122,30 @@ function DisputeUpdatePanel({ dispute, onClose, onSaved }: { dispute: Dispute; o
                 response,
                 reference: reference.trim() || null,
                 resolution: resolution || null,
-              })
+              }),
             );
           }}
         >
           <label htmlFor="response" className="block text-sm font-medium text-text-primary">
             Bureau response
           </label>
-          <textarea id="response" rows={3} value={response} onChange={(e) => setResponse(e.target.value)} className={input} required />
+          <textarea
+            id="response"
+            rows={3}
+            value={response}
+            onChange={(e) => setResponse(e.target.value)}
+            className={input}
+            required
+          />
           <label htmlFor="resolution" className="block text-sm font-medium text-text-primary">
             Outcome
           </label>
-          <select id="resolution" value={resolution} onChange={(e) => setResolution(e.target.value as typeof resolution)} className={input}>
+          <select
+            id="resolution"
+            value={resolution}
+            onChange={(e) => setResolution(e.target.value as typeof resolution)}
+            className={input}
+          >
             <option value="">Still investigating</option>
             <option value="upheld">Upheld — record corrected</option>
             <option value="rejected">Rejected — record confirmed</option>
@@ -127,7 +160,11 @@ function DisputeUpdatePanel({ dispute, onClose, onSaved }: { dispute: Dispute; o
         </form>
       </div>
       {error && <p className="mt-4 text-sm font-medium text-status-very-poor-fg">{error}</p>}
-      <button type="button" onClick={onClose} className="mt-4 cursor-pointer text-sm text-text-muted hover:text-text-primary">
+      <button
+        type="button"
+        onClick={onClose}
+        className="mt-4 cursor-pointer text-sm text-text-muted hover:text-text-primary"
+      >
         Close
       </button>
     </Card>
@@ -212,7 +249,8 @@ function DisputesPageInner() {
                       {d.id.slice(0, 8)}...
                     </span>,
                     <span key="account" className="text-text-primary">
-                      {d.creditor_name} <span className="capitalize text-text-muted">· {d.bureau}</span>
+                      {d.creditor_name}{' '}
+                      <span className="capitalize text-text-muted">· {d.bureau}</span>
                     </span>,
                     <span key="reason" className="text-text-secondary">
                       {d.dispute_reason.replace(/_/g, ' ')}
@@ -227,7 +265,9 @@ function DisputesPageInner() {
                       key="deadline"
                       className={`font-mono text-xs tabular-nums ${d.deadline_breached_at ? 'font-semibold text-status-very-poor-fg' : 'text-text-muted'}`}
                     >
-                      {d.resolution_deadline ? new Date(d.resolution_deadline).toLocaleDateString() : '—'}
+                      {d.resolution_deadline
+                        ? new Date(d.resolution_deadline).toLocaleDateString()
+                        : '—'}
                       {d.deadline_breached_at ? ' · overdue' : ''}
                     </span>,
                     <span key="ref" className="font-mono text-xs text-text-muted">

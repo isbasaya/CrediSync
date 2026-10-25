@@ -47,16 +47,23 @@ export class ConsoleNotificationProvider implements NotificationProvider {
 
   async sendEmail(notification: EmailNotification): Promise<NotificationResult> {
     logger.info(
-      { to: maskRecipient(notification.to), subject: notification.subject, ...(this.showBody ? { body: notification.body } : {}) },
-      'email notification (console)'
+      {
+        to: maskRecipient(notification.to),
+        subject: notification.subject,
+        ...(this.showBody ? { body: notification.body } : {}),
+      },
+      'email notification (console)',
     );
     return { success: true, channel: 'email', messageId: `console-${Date.now()}` };
   }
 
   async sendSms(notification: SmsNotification): Promise<NotificationResult> {
     logger.info(
-      { to: maskRecipient(notification.to), ...(this.showBody ? { message: notification.message } : {}) },
-      'sms notification (console)'
+      {
+        to: maskRecipient(notification.to),
+        ...(this.showBody ? { message: notification.message } : {}),
+      },
+      'sms notification (console)',
     );
     return { success: true, channel: 'sms', messageId: `console-${Date.now()}` };
   }
@@ -76,7 +83,10 @@ export async function sendSms(notification: SmsNotification): Promise<Notificati
   return provider.sendSms(notification);
 }
 
-export async function notifyDisputeSubmitted(email: string, disputeId: string): Promise<NotificationResult> {
+export async function notifyDisputeSubmitted(
+  email: string,
+  disputeId: string,
+): Promise<NotificationResult> {
   return sendEmail({
     to: email,
     subject: 'Your dispute has been submitted',
@@ -84,7 +94,11 @@ export async function notifyDisputeSubmitted(email: string, disputeId: string): 
   });
 }
 
-export async function notifyDisputeResolved(email: string, disputeId: string, upheld: boolean): Promise<NotificationResult> {
+export async function notifyDisputeResolved(
+  email: string,
+  disputeId: string,
+  upheld: boolean,
+): Promise<NotificationResult> {
   return sendEmail({
     to: email,
     subject: 'Dispute resolution update',
@@ -92,7 +106,11 @@ export async function notifyDisputeResolved(email: string, disputeId: string, up
   });
 }
 
-export async function notifyScoreChange(email: string, newScore: number, band: string): Promise<NotificationResult> {
+export async function notifyScoreChange(
+  email: string,
+  newScore: number,
+  band: string,
+): Promise<NotificationResult> {
   return sendEmail({
     to: email,
     subject: 'Your credit score has been updated',

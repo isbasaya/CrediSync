@@ -31,7 +31,7 @@ export default function LoginPage() {
             ? 'Invalid email or password, or the account is temporarily locked.'
             : err.status === 429
               ? 'Too many attempts. Wait a minute and try again.'
-              : 'We couldn’t sign you in. Try again shortly.'
+              : 'We couldn’t sign you in. Try again shortly.',
         );
       } else {
         setError('We can’t reach CrediSync. Check your connection.');
@@ -52,7 +52,10 @@ export default function LoginPage() {
           <p className="mt-2 text-sm text-text-muted">Sign in to the operations portal</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4 rounded-2xl border border-border-default bg-bg-surface p-6 shadow-md">
+        <form
+          onSubmit={handleSubmit}
+          className="space-y-4 rounded-2xl border border-border-default bg-bg-surface p-6 shadow-md"
+        >
           {error && (
             <div className="flex items-center gap-2 rounded-lg border border-status-very-poor-fg/25 bg-status-very-poor-bg px-3 py-2 text-sm text-status-very-poor-fg">
               <AlertTriangleIcon className="h-4 w-4 shrink-0" />

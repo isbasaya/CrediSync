@@ -34,10 +34,21 @@ export default function LoginPage() {
   return (
     <>
       <AppHeader />
-      <PageShell title="Sign in" intro="See your credit reports from all three South African bureaus in one place.">
+      <PageShell
+        title="Sign in"
+        intro="See your credit reports from all three South African bureaus in one place."
+      >
         <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
           {error && <Notice tone="error">{error}</Notice>}
-          <Field id="email" label="Email address" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+          <Field
+            id="email"
+            label="Email address"
+            type="email"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
           <Field
             id="password"
             label="Password"

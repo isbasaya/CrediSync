@@ -11,7 +11,10 @@ import type { BureauSource, NormalizedBureauReport, UnifiedCreditProfile } from 
  * Per-bureau scores are stored as reported; their bands use the same
  * normalised value so the colour shown matches the unified scale.
  */
-function computeUnifiedScore(reports: NormalizedBureauReport[], ranges: ScoreRanges): number | null {
+function computeUnifiedScore(
+  reports: NormalizedBureauReport[],
+  ranges: ScoreRanges,
+): number | null {
   const scores = reports
     .filter((r): r is NormalizedBureauReport & { score: number } => r.score !== null)
     .map((r) => normaliseScore(r.bureau, r.score, ranges));
@@ -21,12 +24,13 @@ function computeUnifiedScore(reports: NormalizedBureauReport[], ranges: ScoreRan
 
 export function buildUnifiedProfile(
   reports: NormalizedBureauReport[],
-  ranges: ScoreRanges = DEFAULT_SCORE_RANGES
+  ranges: ScoreRanges = DEFAULT_SCORE_RANGES,
 ): UnifiedCreditProfile {
   const resolvedClusters = resolveEntities(reports.map((r) => r.accounts));
   const canonical = resolvedClusters.map((c) => c.canonical);
 
-  const scoreFor = (bureau: BureauSource) => reports.find((r) => r.bureau === bureau)?.score ?? null;
+  const scoreFor = (bureau: BureauSource) =>
+    reports.find((r) => r.bureau === bureau)?.score ?? null;
   const bandFor = (bureau: BureauSource) => {
     const s = scoreFor(bureau);
     return s === null ? null : getScoreBand(normaliseScore(bureau, s, ranges));

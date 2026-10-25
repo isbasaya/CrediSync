@@ -5,7 +5,9 @@ const opts = { devFallback: 'dev-only-fallback-value' };
 
 describe('requireSecret', () => {
   it('returns the configured value', () => {
-    expect(requireSecret('S', opts, { NODE_ENV: 'production', S: 'x'.repeat(40) })).toBe('x'.repeat(40));
+    expect(requireSecret('S', opts, { NODE_ENV: 'production', S: 'x'.repeat(40) })).toBe(
+      'x'.repeat(40),
+    );
   });
 
   it('uses the fallback only in development and test', () => {
@@ -19,9 +21,14 @@ describe('requireSecret', () => {
   });
 
   it('rejects short secrets and placeholders outside development', () => {
-    expect(() => requireSecret('S', opts, { NODE_ENV: 'production', S: 'short' })).toThrow(/at least/);
-    expect(() => requireSecret('S', opts, { NODE_ENV: 'production', S: 'change-me-in-production-xxxxxxxxxxxxx' })).toThrow(
-      /placeholder/
+    expect(() => requireSecret('S', opts, { NODE_ENV: 'production', S: 'short' })).toThrow(
+      /at least/,
     );
+    expect(() =>
+      requireSecret('S', opts, {
+        NODE_ENV: 'production',
+        S: 'change-me-in-production-xxxxxxxxxxxxx',
+      }),
+    ).toThrow(/placeholder/);
   });
 });

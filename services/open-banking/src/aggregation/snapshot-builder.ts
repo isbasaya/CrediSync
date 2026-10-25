@@ -1,19 +1,23 @@
 import { categorizeAll } from '../categorization/categorizer';
 import { minimumExpenseNorm, type ExpenseNormBand, DEFAULT_EXPENSE_NORMS } from './expense-norms';
-import type { CategorizedTransaction, FinancialHealthSnapshot, NormalizedAccountFeed } from '../types';
+import type {
+  CategorizedTransaction,
+  FinancialHealthSnapshot,
+  NormalizedAccountFeed,
+} from '../types';
 
-const RETURNED_DEBIT_PATTERN = /\b(returned|insufficient\s*funds|debit\s*order\s*unpaid|unpaid\s*item|rd\s*fee)\b/i;
+const RETURNED_DEBIT_PATTERN =
+  /\b(returned|insufficient\s*funds|debit\s*order\s*unpaid|unpaid\s*item|rd\s*fee)\b/i;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function sumDebits(transactions: CategorizedTransaction[], category: string): number {
-  return transactions.filter((t) => t.category === category && t.amount < 0).reduce((sum, t) => sum + Math.abs(t.amount), 0);
+  return transactions
+    .filter((t) => t.category === category && t.amount < 0)
+    .reduce((sum, t) => sum + Math.abs(t.amount), 0);
 }
 
 function normalizeDescriptionKey(t: CategorizedTransaction): string {
-  return (t.merchantName ?? t.description)
-    .trim()
-    .toLowerCase()
-    .replace(/\d+/g, '');
+  return (t.merchantName ?? t.description).trim().toLowerCase().replace(/\d+/g, '');
 }
 
 /**
@@ -27,7 +31,8 @@ export function periodMonths(periodStart: string, periodEnd: string): number {
   const dayAfterEnd = new Date(end.getTime() + DAY_MS);
   if (start.getUTCDate() === 1 && dayAfterEnd.getUTCDate() === 1) {
     const months =
-      (dayAfterEnd.getUTCFullYear() - start.getUTCFullYear()) * 12 + (dayAfterEnd.getUTCMonth() - start.getUTCMonth());
+      (dayAfterEnd.getUTCFullYear() - start.getUTCFullYear()) * 12 +
+      (dayAfterEnd.getUTCMonth() - start.getUTCMonth());
     return Math.max(1, months);
   }
   const days = (end.getTime() - start.getTime()) / DAY_MS + 1;
@@ -43,7 +48,11 @@ export function periodMonths(periodStart: string, periodEnd: string): number {
 function incomeRegularityScore(income: CategorizedTransaction[]): number {
   if (income.length === 0) return 0;
   const byMonth = new Map<string, number>();
-  for (const t of income) byMonth.set(t.transactionDate.slice(0, 7), (byMonth.get(t.transactionDate.slice(0, 7)) ?? 0) + t.amount);
+  for (const t of income)
+    byMonth.set(
+      t.transactionDate.slice(0, 7),
+      (byMonth.get(t.transactionDate.slice(0, 7)) ?? 0) + t.amount,
+    );
   const totals = [...byMonth.values()];
   if (totals.length === 1) return 0.5;
 
@@ -64,7 +73,7 @@ const money = (n: number) => Number(n.toFixed(2));
 export function buildFinancialHealthSnapshot(
   userId: string,
   feed: NormalizedAccountFeed,
-  norms: ExpenseNormBand[] = DEFAULT_EXPENSE_NORMS
+  norms: ExpenseNormBand[] = DEFAULT_EXPENSE_NORMS,
 ): FinancialHealthSnapshot {
   const categorized = categorizeAll(feed.transactions);
   const months = periodMonths(feed.periodStart, feed.periodEnd);
@@ -73,7 +82,9 @@ export function buildFinancialHealthSnapshot(
   const incomeTransactions = categorized.filter((t) => t.category === 'income' && t.amount > 0);
   const netIncome = monthly(incomeTransactions.reduce((sum, t) => sum + t.amount, 0));
   const unclassifiedCredits = monthly(
-    categorized.filter((t) => t.category === 'other' && t.amount > 0).reduce((sum, t) => sum + t.amount, 0)
+    categorized
+      .filter((t) => t.category === 'other' && t.amount > 0)
+      .reduce((sum, t) => sum + t.amount, 0),
   );
 
   const housing = monthly(sumDebits(categorized, 'housing'));
@@ -89,7 +100,17 @@ export function buildFinancialHealthSnapshot(
   const savings = monthly(sumDebits(categorized, 'savings'));
   const otherSpend = monthly(sumDebits(categorized, 'other'));
 
-  const livingExpenses = housing + transport + food + utilities + insurance + healthcare + education + entertainment + gambling + otherSpend;
+  const livingExpenses =
+    housing +
+    transport +
+    food +
+    utilities +
+    insurance +
+    healthcare +
+    education +
+    entertainment +
+    gambling +
+    otherSpend;
   // Bank feeds show net (after-tax) inflow; it's used here as the income
   // figure for the norm lookup, which makes the norm slightly lower than a
   // gross-income calculation would. See expense-norms.ts.
@@ -98,7 +119,9 @@ export function buildFinancialHealthSnapshot(
 
   const recent = last30Days(feed.periodEnd, feed.closingBalances);
   const averageClosingBalance =
-    feed.closingBalances.length > 0 ? feed.closingBalances.reduce((s, b) => s + b.balance, 0) / feed.closingBalances.length : 0;
+    feed.closingBalances.length > 0
+      ? feed.closingBalances.reduce((s, b) => s + b.balance, 0) / feed.closingBalances.length
+      : 0;
 
   return {
     userId,
@@ -123,13 +146,15 @@ export function buildFinancialHealthSnapshot(
     entertainmentExpenses: entertainment,
     gamblingSpend: gambling,
 
-    debtToIncomeRatio: netIncome > 0 ? Number(Math.min(9.9999, debtRepayment / netIncome).toFixed(4)) : null,
+    debtToIncomeRatio:
+      netIncome > 0 ? Number(Math.min(9.9999, debtRepayment / netIncome).toFixed(4)) : null,
     savingsRate: netIncome > 0 ? Number(Math.min(9.9999, savings / netIncome).toFixed(4)) : null,
 
     averageClosingBalance: money(averageClosingBalance),
     lowestBalance30d: recent.length > 0 ? money(Math.min(...recent.map((b) => b.balance))) : null,
     overdraftDays30d: Math.min(30, recent.filter((b) => b.balance < 0).length),
-    returnedDebitCount: categorized.filter((t) => RETURNED_DEBIT_PATTERN.test(t.description)).length,
+    returnedDebitCount: categorized.filter((t) => RETURNED_DEBIT_PATTERN.test(t.description))
+      .length,
 
     minimumExpenseNorm: norm,
     affordabilitySurplus,

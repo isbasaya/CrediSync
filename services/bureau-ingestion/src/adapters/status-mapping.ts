@@ -54,7 +54,10 @@ export function mapBureauStatus(bureau: string, rawStatus: string): AccountStatu
   const mapped = STATUS_TABLE[normalized];
   if (mapped) return mapped;
 
-  logger.warn({ bureau, rawStatus: normalized.slice(0, 40) }, 'unmapped bureau account status; recording as unknown');
+  logger.warn(
+    { bureau, rawStatus: normalized.slice(0, 40) },
+    'unmapped bureau account status; recording as unknown',
+  );
   return 'unknown';
 }
 

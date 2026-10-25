@@ -27,7 +27,10 @@ export default tseslint.config(
   {
     files: ['**/*.{ts,tsx}'],
     rules: {
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
       '@typescript-eslint/no-explicit-any': 'warn',
       'prefer-const': 'error',
       'no-console': ['warn', { allow: ['warn', 'error'] }],
@@ -35,11 +38,18 @@ export default tseslint.config(
   },
   {
     files: ['**/*.{js,cjs,mjs}'],
-    languageOptions: { globals: { require: 'readonly', module: 'writable', __dirname: 'readonly', process: 'readonly' } },
+    languageOptions: {
+      globals: {
+        require: 'readonly',
+        module: 'writable',
+        __dirname: 'readonly',
+        process: 'readonly',
+      },
+    },
     rules: { '@typescript-eslint/no-require-imports': 'off' },
   },
   {
     files: ['**/__tests__/**', '**/*.test.ts', 'e2e/**'],
     rules: { '@typescript-eslint/no-explicit-any': 'off' },
-  }
+  },
 );

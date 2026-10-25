@@ -1,6 +1,11 @@
 import pino from 'pino';
 import { createPool } from '@credisync/db';
-import { runDeletionRequests, runDisputeDeadlineMonitor, runPartitionMaintenance, runRetention } from './jobs';
+import {
+  runDeletionRequests,
+  runDisputeDeadlineMonitor,
+  runPartitionMaintenance,
+  runRetention,
+} from './jobs';
 
 /**
  * Scheduled jobs. Run from a scheduler (e.g. EventBridge Scheduler → ECS task):

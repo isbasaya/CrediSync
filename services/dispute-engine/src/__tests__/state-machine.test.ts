@@ -30,7 +30,9 @@ describe('dispute state-machine', () => {
 
   describe('invalid transitions', () => {
     it('rejects draft -> resolved_upheld', () => {
-      expect(() => assertValidTransition('draft', 'resolved_upheld')).toThrow(InvalidTransitionError);
+      expect(() => assertValidTransition('draft', 'resolved_upheld')).toThrow(
+        InvalidTransitionError,
+      );
     });
 
     it('rejects submitted -> draft', () => {
@@ -42,7 +44,9 @@ describe('dispute state-machine', () => {
     });
 
     it('rejects resolved_upheld -> any', () => {
-      expect(() => assertValidTransition('resolved_upheld', 'escalated_ncr')).toThrow(InvalidTransitionError);
+      expect(() => assertValidTransition('resolved_upheld', 'escalated_ncr')).toThrow(
+        InvalidTransitionError,
+      );
     });
   });
 

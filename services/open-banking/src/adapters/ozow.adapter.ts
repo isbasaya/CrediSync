@@ -52,12 +52,16 @@ export class OzowAdapter implements OpenBankingAdapter {
   constructor(
     private readonly baseUrl: string = process.env.OZOW_API_BASE_URL ?? '',
     private readonly apiKey: string = process.env.OZOW_API_KEY ?? '',
-    private readonly siteCode: string = process.env.OZOW_SITE_CODE ?? ''
+    private readonly siteCode: string = process.env.OZOW_SITE_CODE ?? '',
   ) {}
 
   async fetchTransactions(request: OpenBankingFetchRequest): Promise<NormalizedAccountFeed> {
     if (!this.baseUrl || !this.apiKey || !this.siteCode) {
-      throw new OpenBankingFetchError('ozow', 'auth', 'missing OZOW_API_BASE_URL/API_KEY/SITE_CODE');
+      throw new OpenBankingFetchError(
+        'ozow',
+        'auth',
+        'missing OZOW_API_BASE_URL/API_KEY/SITE_CODE',
+      );
     }
 
     let response: Response;
@@ -81,7 +85,11 @@ export class OzowAdapter implements OpenBankingAdapter {
     }
 
     if (response.status === 401 || response.status === 403) {
-      throw new OpenBankingFetchError('ozow', 'consent_revoked', 'account link token invalid or revoked');
+      throw new OpenBankingFetchError(
+        'ozow',
+        'consent_revoked',
+        'account link token invalid or revoked',
+      );
     }
     if (!response.ok) {
       throw new OpenBankingFetchError('ozow', 'upstream_error', `HTTP ${response.status}`);

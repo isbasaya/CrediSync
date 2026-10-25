@@ -45,7 +45,9 @@ describe('LocalKeyProvider', () => {
   });
 
   it('rejects a master key of the wrong length', () => {
-    expect(() => new LocalKeyProvider({ NODE_ENV: 'development', ENCRYPTION_MASTER_KEY: 'abcd' })).toThrow(/32 bytes/);
+    expect(
+      () => new LocalKeyProvider({ NODE_ENV: 'development', ENCRYPTION_MASTER_KEY: 'abcd' }),
+    ).toThrow(/32 bytes/);
   });
 });
 

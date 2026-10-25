@@ -27,7 +27,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en-ZA" className={inter.variable}>
       <body className="min-h-dvh bg-bg-base font-sans antialiased">
-        {process.env.NODE_ENV !== 'production' && <template dangerouslySetInnerHTML={{ __html: `<!--${DIRECTION_CONTRACT}-->` }} />}
+        {process.env.NODE_ENV !== 'production' && (
+          <template dangerouslySetInnerHTML={{ __html: `<!--${DIRECTION_CONTRACT}-->` }} />
+        )}
         <SessionProvider>{children}</SessionProvider>
       </body>
     </html>

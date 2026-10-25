@@ -33,16 +33,24 @@ interface TokenBody {
 /** Sets session cookies and decides whether tokens stay in the body. */
 export function deliverSession(req: Request, res: Response, status: number, body: TokenBody): void {
   if (body.accessToken) {
-    res.cookie(ACCESS_TOKEN_COOKIE, body.accessToken, { ...baseCookie(), path: '/api', maxAge: ACCESS_TOKEN_TTL_SECONDS * 1000 });
+    res.cookie(ACCESS_TOKEN_COOKIE, body.accessToken, {
+      ...baseCookie(),
+      path: '/api',
+      maxAge: ACCESS_TOKEN_TTL_SECONDS * 1000,
+    });
   }
   if (body.refreshToken) {
-    res.cookie(REFRESH_TOKEN_COOKIE, body.refreshToken, { ...baseCookie(), path: '/api/auth', maxAge: REFRESH_TTL_SECONDS * 1000 });
+    res.cookie(REFRESH_TOKEN_COOKIE, body.refreshToken, {
+      ...baseCookie(),
+      path: '/api/auth',
+      maxAge: REFRESH_TTL_SECONDS * 1000,
+    });
   }
   if (isNativeClient(req)) {
     res.status(status).json(body);
     return;
   }
-   
+
   const { accessToken: _a, refreshToken: _r, ...rest } = body;
   res.status(status).json(rest);
 }

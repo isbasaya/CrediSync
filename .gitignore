@@ -20,7 +20,6 @@ mobile/ios/.symlinks/
 mobile/ios/Pods/
 mobile/ios/Flutter/Generated.xcconfig
 mobile/ios/Runner/GeneratedPluginRegistrant.*
-mobile/pubspec.lock
 
 # Python
 __pycache__/

@@ -59,7 +59,10 @@ export function requireActingUser(req: Request, res: Response, next: NextFunctio
   next();
 }
 
-export function internalHeaders(user?: { id: string; role: string }, traceId?: string): Record<string, string> {
+export function internalHeaders(
+  user?: { id: string; role: string },
+  traceId?: string,
+): Record<string, string> {
   return {
     [INTERNAL_TOKEN_HEADER]: internalServiceToken(),
     ...(user ? { [ACTING_USER_HEADER]: user.id, [ACTING_ROLE_HEADER]: user.role } : {}),

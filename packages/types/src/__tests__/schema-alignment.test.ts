@@ -14,7 +14,10 @@ import {
   USER_ROLES,
 } from '../enums';
 
-const schema = readFileSync(join(__dirname, '..', '..', '..', '..', 'db', 'schema.sql'), 'utf-8').replace(/--[^\n]*/g, '');
+const schema = readFileSync(
+  join(__dirname, '..', '..', '..', '..', 'db', 'schema.sql'),
+  'utf-8',
+).replace(/--[^\n]*/g, '');
 
 function sqlEnum(name: string): string[] {
   const match = new RegExp(`CREATE TYPE ${name} AS ENUM \\(([^;]*?)\\);`, 's').exec(schema);

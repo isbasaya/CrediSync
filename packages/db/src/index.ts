@@ -39,7 +39,7 @@ export function isUuid(value: unknown): value is string {
 async function inTransaction<T>(
   pool: Pool,
   settings: Array<[string, string]>,
-  fn: (client: PoolClient) => Promise<T>
+  fn: (client: PoolClient) => Promise<T>,
 ): Promise<T> {
   const client = await pool.connect();
   try {
@@ -58,7 +58,11 @@ async function inTransaction<T>(
   }
 }
 
-export function withUser<T>(pool: Pool, userId: string, fn: (client: PoolClient) => Promise<T>): Promise<T> {
+export function withUser<T>(
+  pool: Pool,
+  userId: string,
+  fn: (client: PoolClient) => Promise<T>,
+): Promise<T> {
   if (!isUuid(userId)) {
     return Promise.reject(new Error('withUser requires a valid user UUID'));
   }
@@ -99,7 +103,7 @@ export async function writeAudit(client: PoolClient | Pool, event: AuditEvent): 
       event.errorMessage ?? null,
       normaliseIp(event.ipAddress),
       event.userAgent ?? null,
-    ]
+    ],
   );
 }
 
