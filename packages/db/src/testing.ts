@@ -1,11 +1,11 @@
-import { readFileSync } from 'fs';
+import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { randomBytes } from 'crypto';
 import { Client, Pool } from 'pg';
 
 /**
- * Integration-test helper: creates a throwaway database, applies the real
- * db/schema.sql as a superuser, and returns a pool that connects as the
+ * Integration-test helper: creates a throwaway database, applies every
+ * migration (the first is db/schema.sql) as a superuser, and returns a pool that connects as the
  * non-owner app role so row-level security behaves exactly as in production.
  *
  * Requires TEST_DATABASE_ADMIN_URL (a superuser URL to any database on the
@@ -14,6 +14,13 @@ import { Client, Pool } from 'pg';
 export const testDatabaseAvailable = Boolean(process.env.TEST_DATABASE_ADMIN_URL);
 
 const REPO_ROOT = join(__dirname, '..', '..', '..');
+const MIGRATIONS_DIR = join(REPO_ROOT, 'packages', 'migrations', 'migrations');
+
+function migrationFiles(): string[] {
+  return readdirSync(MIGRATIONS_DIR)
+    .filter((f) => /^\d{14}_[a-z0-9_]+\.sql$/.test(f))
+    .sort();
+}
 
 export interface TestDatabase {
   pool: Pool;
@@ -36,7 +43,11 @@ export async function createTestDatabase(): Promise<TestDatabase> {
   const setup = new Client({ connectionString: dbAdminUrl });
   await setup.connect();
   await setup.query(readFileSync(join(REPO_ROOT, 'db', 'dev', '00-roles.sql'), 'utf-8'));
-  await setup.query(readFileSync(join(REPO_ROOT, 'db', 'schema.sql'), 'utf-8'));
+  // Apply every migration in order (the first is db/schema.sql), exactly as the migration runner does.
+  for (const file of migrationFiles()) {
+    const sql = readFileSync(join(MIGRATIONS_DIR, file), 'utf-8');
+    await setup.query(sql.split('-- @rollback')[0]!);
+  }
   await setup.end();
 
   const appUrl = new URL(dbAdminUrl);

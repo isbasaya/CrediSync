@@ -1,11 +1,13 @@
 import pino from 'pino';
 import { createPool } from '@credisync/db';
 import { verifyStartupConfig } from '@credisync/middleware';
+import { assertEmailConfigured } from '@credisync/notifications';
 import { createApp } from './app';
 
 const logger = pino({ name: 'auth-service' });
 // Fail at boot, not on the first request, if a secret is missing.
 verifyStartupConfig({ jwt: true, hmac: true, encryption: true, database: true });
+assertEmailConfigured();
 const pool = createPool();
 const app = createApp(pool);
 

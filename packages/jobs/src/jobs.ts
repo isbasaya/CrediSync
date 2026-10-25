@@ -1,6 +1,6 @@
 import type { Pool } from 'pg';
 import pino from 'pino';
-import { withSystem, writeAudit } from '@credisync/db';
+import { withSystem, writeAudit, enqueueEvent } from '@credisync/db';
 import { sendEmail } from '@credisync/notifications';
 import { deleteUserFiles } from '@credisync/storage';
 
@@ -40,6 +40,9 @@ export async function runRetention(pool: Pool): Promise<Record<string, number>> 
     const sessions = await client.query(
       `DELETE FROM credisync.user_sessions WHERE expires_at < NOW() - INTERVAL '7 days' OR revoked_at < NOW() - INTERVAL '30 days'`,
     );
+    const events = await client.query(
+      `DELETE FROM credisync.event_outbox WHERE published_at < NOW() - INTERVAL '7 days'`,
+    );
     const tokens = await client.query(
       `DELETE FROM credisync.email_verification_tokens WHERE expires_at < NOW() - INTERVAL '7 days'`,
     );
@@ -57,6 +60,7 @@ export async function runRetention(pool: Pool): Promise<Record<string, number>> 
       supersededProfiles: profiles.rowCount ?? 0,
       sessions: sessions.rowCount ?? 0,
       verificationTokens: tokens.rowCount ?? 0,
+      publishedEvents: events.rowCount ?? 0,
       auditLogs: audit.rowCount ?? 0,
     };
   });
@@ -116,6 +120,12 @@ export async function runDisputeDeadlineMonitor(pool: Pool): Promise<number> {
         resourceId: row.id,
         payload: { bureau: row.bureau, deadline: row.resolution_deadline },
       });
+      await enqueueEvent(client, {
+        type: 'dispute.deadline_breached',
+        aggregateType: 'dispute',
+        aggregateId: row.id,
+        userId: row.user_id,
+      });
     }
     return r.rows;
   });
@@ -158,6 +168,12 @@ export async function runDeletionRequests(pool: Pool): Promise<number> {
           eventType: 'data_deletion_completed',
           resourceType: 'user',
           resourceId: request.user_id,
+        });
+        await enqueueEvent(client, {
+          type: 'user.erased',
+          aggregateType: 'user',
+          aggregateId: request.user_id,
+          userId: request.user_id,
         });
       });
       completed += 1;

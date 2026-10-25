@@ -6,9 +6,12 @@ import {
   runPartitionMaintenance,
   runRetention,
 } from './jobs';
+import { drainOutbox } from './outbox';
+import { assertEmailConfigured } from '@credisync/notifications';
 
 /**
  * Scheduled jobs. Run from a scheduler (e.g. EventBridge Scheduler → ECS task):
+ *   jobs outbox       every minute (relays domain events to SNS)
  *   jobs deadlines    hourly
  *   jobs deletions    hourly
  *   jobs retention    daily
@@ -18,6 +21,7 @@ import {
 const logger = pino({ name: 'jobs' });
 
 async function main(): Promise<void> {
+  assertEmailConfigured();
   const pool = createPool({ max: 2 });
   const command = process.argv[2] ?? 'all';
   try {
@@ -31,6 +35,9 @@ async function main(): Promise<void> {
       case 'deadlines':
         await runDisputeDeadlineMonitor(pool);
         break;
+      case 'outbox':
+        await drainOutbox(pool);
+        break;
       case 'deletions':
         await runDeletionRequests(pool);
         break;
@@ -39,6 +46,7 @@ async function main(): Promise<void> {
         await runDisputeDeadlineMonitor(pool);
         await runDeletionRequests(pool);
         await runRetention(pool);
+        await drainOutbox(pool);
         break;
       default:
         logger.error({ command }, 'unknown job command');

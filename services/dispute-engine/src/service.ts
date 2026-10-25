@@ -1,6 +1,6 @@
 import type { Pool, PoolClient } from 'pg';
 import pino from 'pino';
-import { withSystem, withUser, writeAudit } from '@credisync/db';
+import { withSystem, withUser, writeAudit, enqueueEvent } from '@credisync/db';
 import { decryptFromBytes } from '@credisync/crypto';
 import { maskSaIdNumber, type DisputeReason, type DisputeStatus } from '@credisync/types';
 import { sendEmail } from '@credisync/notifications';
@@ -244,6 +244,13 @@ export async function createDispute(
       resourceId: id,
       payload: { reason: input.reason, bureau: account.bureau },
     });
+    await enqueueEvent(client, {
+      type: 'dispute.created',
+      aggregateType: 'dispute',
+      aggregateId: id,
+      userId,
+      payload: { bureau: account.bureau },
+    });
 
     const r = await client.query(`${SELECT_DISPUTE} WHERE d.id = $1`, [id]);
     return toRecord(r.rows[0]!);
@@ -326,6 +333,13 @@ export async function submitDispute(
       resourceId: id,
       payload: { channel, resolution_deadline: deadline },
     });
+    await enqueueEvent(client, {
+      type: 'dispute.submitted',
+      aggregateType: 'dispute',
+      aggregateId: id,
+      userId,
+      payload: { channel, deadline },
+    });
     return updated;
   });
 
@@ -388,6 +402,12 @@ export async function escalateDispute(
       eventType: 'dispute_escalated',
       resourceType: 'dispute',
       resourceId: id,
+    });
+    await enqueueEvent(client, {
+      type: 'dispute.escalated',
+      aggregateType: 'dispute',
+      aggregateId: id,
+      userId,
     });
     return updated;
   });
@@ -466,6 +486,12 @@ export async function recordBureauResponse(
     resourceType: 'dispute',
     resourceId: id,
   });
+  await enqueueEvent(client, {
+    type: 'dispute.bureau_responded',
+    aggregateType: 'dispute',
+    aggregateId: id,
+    userId: updated.userId,
+  });
   return updated;
 }
 
@@ -488,6 +514,13 @@ export async function resolveDispute(
     eventType: 'dispute_resolved',
     resourceType: 'dispute',
     resourceId: id,
+    payload: { upheld },
+  });
+  await enqueueEvent(client, {
+    type: 'dispute.resolved',
+    aggregateType: 'dispute',
+    aggregateId: id,
+    userId: updated.userId,
     payload: { upheld },
   });
   return updated;

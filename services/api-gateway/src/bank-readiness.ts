@@ -1,5 +1,5 @@
 import type { Pool } from 'pg';
-import { withUser, writeAudit } from '@credisync/db';
+import { withUser, writeAudit, enqueueEvent } from '@credisync/db';
 import { internalHeaders } from '@credisync/middleware';
 import { UpstreamError } from './proxy';
 
@@ -136,6 +136,13 @@ export async function scoreBankReadiness(
         model: result.model_version,
         has_bank_data: inputs.snapshot !== null,
       },
+    });
+    await enqueueEvent(client, {
+      type: 'bank_readiness.scored',
+      aggregateType: 'credit_profile',
+      aggregateId: inputs.profile.id,
+      userId,
+      payload: { tier: result.tier },
     });
   });
 

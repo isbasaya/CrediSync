@@ -1,5 +1,5 @@
 import type { Pool } from 'pg';
-import { withUser, writeAudit } from '@credisync/db';
+import { withUser, writeAudit, enqueueEvent } from '@credisync/db';
 import { decryptFromBytes } from '@credisync/crypto';
 import type { BankReadinessTier, BureauSource, ScoreBand, AccountStatus } from '@credisync/types';
 import type { UnifiedCreditProfile } from './types';
@@ -156,6 +156,13 @@ export async function persistUnifiedProfile(
         total_accounts: profile.totalAccounts,
         bureaus: fetchedBureaus,
       },
+    });
+    await enqueueEvent(client, {
+      type: 'credit_profile.refreshed',
+      aggregateType: 'credit_profile',
+      aggregateId: creditProfileId,
+      userId,
+      payload: { bureaus: fetchedBureaus.join(',') },
     });
     if (merges > 0) {
       await writeAudit(client, {

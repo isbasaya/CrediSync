@@ -4,6 +4,8 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    testTimeout: 30_000,
+    hookTimeout: 90_000,
     include: ['src/**/*.test.ts'],
     coverage: {
       provider: 'v8',

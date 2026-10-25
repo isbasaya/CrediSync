@@ -1,5 +1,5 @@
 import type { Pool, PoolClient } from 'pg';
-import { withUser, writeAudit } from '@credisync/db';
+import { withUser, writeAudit, enqueueEvent } from '@credisync/db';
 import { decryptFromBytes, encryptToBytes } from '@credisync/crypto';
 import type { FinancialHealthSnapshot, IngestionSource } from './types';
 
@@ -46,6 +46,13 @@ export async function createLink(
       eventType: 'bank_link_created',
       resourceType: 'open_banking_link',
       resourceId: r.rows[0]!.id,
+      payload: { source },
+    });
+    await enqueueEvent(client, {
+      type: 'open_banking.linked',
+      aggregateType: 'open_banking_link',
+      aggregateId: r.rows[0]!.id,
+      userId,
       payload: { source },
     });
     return { id: r.rows[0]!.id, source, createdAt: r.rows[0]!.created_at.toISOString() };
@@ -214,6 +221,12 @@ export async function persistSnapshot(
         transaction_count: fresh.length,
         skipped_duplicates: s.transactions.length - fresh.length,
       },
+    });
+    await enqueueEvent(client, {
+      type: 'open_banking.snapshot_created',
+      aggregateType: 'financial_health_snapshot',
+      aggregateId: snapshotId,
+      userId: s.userId,
     });
     return { snapshotId, inserted: fresh.length };
   });

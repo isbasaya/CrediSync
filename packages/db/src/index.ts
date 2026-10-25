@@ -114,3 +114,49 @@ function normaliseIp(ip: string | null | undefined): string | null {
 }
 
 export { createTestDatabase, testDatabaseAvailable, type TestDatabase } from './testing';
+
+/**
+ * Domain events, written in the SAME transaction as the change they
+ * describe (transactional outbox) and relayed to SNS by the `outbox` job.
+ * Consumers must treat delivery as at-least-once and de-duplicate by eventId.
+ *
+ * Payloads carry identifiers and codes only — never names, ID numbers,
+ * contact details or amounts — so events can be fanned out safely.
+ */
+export type DomainEventType =
+  | 'user.registered'
+  | 'user.deletion_requested'
+  | 'user.erased'
+  | 'consent.changed'
+  | 'credit_profile.refreshed'
+  | 'dispute.created'
+  | 'dispute.submitted'
+  | 'dispute.bureau_responded'
+  | 'dispute.resolved'
+  | 'dispute.escalated'
+  | 'dispute.deadline_breached'
+  | 'open_banking.linked'
+  | 'open_banking.snapshot_created'
+  | 'bank_readiness.scored';
+
+export interface DomainEvent {
+  type: DomainEventType;
+  aggregateType: string;
+  aggregateId?: string | null;
+  userId?: string | null;
+  payload?: Record<string, string | number | boolean | null>;
+}
+
+export async function enqueueEvent(client: PoolClient, event: DomainEvent): Promise<void> {
+  await client.query(
+    `INSERT INTO credisync.event_outbox (event_type, aggregate_type, aggregate_id, user_id, payload)
+     VALUES ($1, $2, $3, $4, $5::jsonb)`,
+    [
+      event.type,
+      event.aggregateType,
+      event.aggregateId ?? null,
+      event.userId ?? null,
+      JSON.stringify(event.payload ?? {}),
+    ],
+  );
+}

@@ -13,6 +13,7 @@ import {
   runPartitionMaintenance,
   runRetention,
 } from '../jobs';
+import { runOutboxRelay, type EventPublisher, type OutboxMessage } from '../outbox';
 
 const ALICE = '11111111-1111-4111-8111-111111111111';
 
@@ -101,5 +102,42 @@ describe.skipIf(!testDatabaseAvailable)('scheduled jobs (real Postgres)', () => 
       [ALICE],
     );
     expect(audit.rows[0].n).toBe(1);
+  });
+
+  it('relays outbox events once, and backs off when publishing fails', async () => {
+    const failing: EventPublisher = {
+      async publish() {
+        throw new Error('sns unavailable');
+      },
+    };
+    const first = await runOutboxRelay(db.pool, failing);
+    expect(first.failed).toBeGreaterThan(0);
+    const pending = await db.adminPool.query(
+      'SELECT attempts, last_error, next_attempt_at > NOW() AS delayed FROM credisync.event_outbox WHERE published_at IS NULL LIMIT 1',
+    );
+    expect(pending.rows[0]).toMatchObject({
+      attempts: 1,
+      last_error: 'sns unavailable',
+      delayed: true,
+    });
+
+    await db.adminPool.query('UPDATE credisync.event_outbox SET next_attempt_at = NOW()');
+    const sent: OutboxMessage[] = [];
+    const ok: EventPublisher = {
+      async publish(messages) {
+        sent.push(...messages);
+        return { failed: new Set<string>() };
+      },
+    };
+    const second = await runOutboxRelay(db.pool, ok);
+    expect(second.failed).toBe(0);
+    expect(sent.map((m) => m.eventType).sort()).toEqual([
+      'dispute.deadline_breached',
+      'user.erased',
+    ]);
+    expect(JSON.stringify(sent)).not.toContain('alice@example.co.za');
+
+    const again = await runOutboxRelay(db.pool, ok);
+    expect(again.published).toBe(0);
   });
 });

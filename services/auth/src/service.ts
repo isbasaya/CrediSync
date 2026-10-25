@@ -1,7 +1,7 @@
 import bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
 import type { Pool, PoolClient } from 'pg';
-import { withSystem, withUser, writeAudit } from '@credisync/db';
+import { withSystem, withUser, writeAudit, enqueueEvent } from '@credisync/db';
 import { encryptToBytes, hmacLookup, randomToken, sha256Hex } from '@credisync/crypto';
 import { signAccessToken, ACCESS_TOKEN_TTL_SECONDS, type Role } from '@credisync/middleware';
 import { normaliseSaIdNumber, validateSaIdNumber } from '@credisync/types';
@@ -207,6 +207,12 @@ export async function signup(
       },
       ipAddress: meta.ip,
       userAgent: meta.userAgent,
+    });
+    await enqueueEvent(client, {
+      type: 'user.registered',
+      aggregateType: 'user',
+      aggregateId: id,
+      userId: id,
     });
 
     const row = await client.query(`SELECT ${USER_COLUMNS} FROM credisync.users WHERE id = $1`, [
@@ -566,6 +572,13 @@ export async function updateConsents(
         ipAddress: meta.ip,
         userAgent: meta.userAgent,
       });
+      await enqueueEvent(client, {
+        type: 'consent.changed',
+        aggregateType: 'user',
+        aggregateId: userId,
+        userId,
+        payload: { consent_type: type, granted: value },
+      });
     }
   });
 }
@@ -596,6 +609,12 @@ export async function requestDeletion(
       resourceId: userId,
       ipAddress: meta.ip,
       userAgent: meta.userAgent,
+    });
+    await enqueueEvent(client, {
+      type: 'user.deletion_requested',
+      aggregateType: 'user',
+      aggregateId: userId,
+      userId,
     });
     return inserted.rows[0]!.scheduled_for;
   });
