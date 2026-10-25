@@ -64,15 +64,39 @@ export function normaliseRoute(path: string): string {
   return path.replace(UUID_SEGMENT, '/:id').replace(NUMERIC_SEGMENT, '/:n');
 }
 
+let sharedStore: RateLimitStore | null = null;
+
+/**
+ * Redis when REDIS_URL is set (required for more than one replica),
+ * otherwise one in-process store shared by every limiter.
+ */
+export function defaultRateLimitStore(env: NodeJS.ProcessEnv = process.env): RateLimitStore {
+  if (!sharedStore) {
+    if (env.REDIS_URL) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { createRedisRateLimitStore } =
+        require('./redis-store') as typeof import('./redis-store');
+      sharedStore = createRedisRateLimitStore(env.REDIS_URL);
+    } else {
+      sharedStore = new MemoryRateLimitStore();
+    }
+  }
+  return sharedStore;
+}
+
 export function createRateLimiter(config: RateLimitConfig) {
   const { windowMs, maxRequests } = config;
-  const store = config.store ?? new MemoryRateLimitStore();
+  // Resolved on first use so REDIS_URL from the environment is honoured.
+  let store: RateLimitStore | undefined = config.store;
+  const getStore = () => (store ??= defaultRateLimitStore());
 
   return (req: Request, res: Response, next: NextFunction): void => {
     const client = config.keyGenerator ? config.keyGenerator(req) : (req.ip ?? 'unknown');
-    const key = config.perRoute ? `${client}|${req.method}|${normaliseRoute(req.path)}` : client;
+    // Namespaced by limit settings so limiters sharing one store never share counters.
+    const scope = `${windowMs}:${maxRequests}${config.perRoute ? `:${req.method}|${normaliseRoute(req.path)}` : ''}`;
+    const key = `${scope}|${client}`;
 
-    store
+    getStore()
       .increment(key, windowMs)
       .then(({ count, resetAt }) => {
         res.setHeader('X-RateLimit-Limit', String(maxRequests));

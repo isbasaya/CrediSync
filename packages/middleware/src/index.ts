@@ -5,6 +5,7 @@ export {
   standardRateLimiter,
   strictRateLimiter,
   MemoryRateLimitStore,
+  defaultRateLimitStore,
   normaliseRoute,
   type RateLimitConfig,
   type RateLimitStore,
@@ -34,3 +35,4 @@ export {
   type Role,
 } from './jwt';
 export { verifyStartupConfig, type StartupRequirements } from './startup';
+export { RedisRateLimitStore, createRedisRateLimitStore } from './redis-store';

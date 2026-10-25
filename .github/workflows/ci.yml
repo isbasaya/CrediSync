@@ -41,8 +41,12 @@ jobs:
         ports: ['5432:5432']
         options: >-
           --health-cmd "pg_isready -U credisync" --health-interval 3s --health-timeout 3s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
     env:
       NODE_ENV: test
+      TEST_REDIS_URL: redis://localhost:6379
       # Integration suites create throwaway databases on this server and skip when it isn't set.
       TEST_DATABASE_ADMIN_URL: postgresql://credisync:ci_password@localhost:5432/credisync
     steps:
