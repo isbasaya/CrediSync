@@ -37,6 +37,7 @@ interface StitchRawResponse {
 
 function mapTransaction(raw: StitchRawTransaction): NormalizedTransaction {
   return {
+    providerTransactionId: raw.id,
     transactionDate: raw.date,
     postedDate: raw.postingDate,
     amount: raw.amountInCents / 100,

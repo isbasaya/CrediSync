@@ -34,6 +34,7 @@ interface OzowRawResponse {
 
 function mapTransaction(raw: OzowRawTransaction): NormalizedTransaction {
   return {
+    providerTransactionId: raw.transactionId,
     transactionDate: raw.valueDate,
     postedDate: raw.processedDate,
     amount: raw.direction === 'DEBIT' ? -Math.abs(raw.amount) : Math.abs(raw.amount),
