@@ -1,4 +1,4 @@
-# Requires Python 3.11+ (uses PEP 604 `X | None` union syntax and builtin generics)
-fastapi==0.111.0
-uvicorn[standard]==0.30.1
-pydantic==2.8.2
+# Python 3.11+ (PEP 604 unions, builtin generics)
+fastapi==0.115.12
+uvicorn[standard]==0.34.2
+pydantic==2.11.4

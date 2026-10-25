@@ -8,7 +8,7 @@ gateway can forward those rows with minimal transformation.
 from enum import Enum
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class BankReadinessTier(str, Enum):
@@ -19,6 +19,8 @@ class BankReadinessTier(str, Enum):
 
 
 class BankReadinessInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     # From credit_profiles
     unified_score: Optional[int] = Field(None, ge=0, le=999)
     adverse_accounts: int = Field(0, ge=0)

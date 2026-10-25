@@ -12,7 +12,7 @@ when the underlying methodology changes.
 """
 from .schemas import BankReadinessInput, BankReadinessResult, BankReadinessTier, FactorBreakdown
 
-MODEL_VERSION = "rules-v1.0"
+MODEL_VERSION = "rules-v1.1"
 
 WEIGHTS = {
     "credit_score": 0.35,
@@ -22,7 +22,8 @@ WEIGHTS = {
     "income_stability": 0.10,
     "account_conduct": 0.10,
 }
-assert abs(sum(WEIGHTS.values()) - 1.0) < 1e-9
+if abs(sum(WEIGHTS.values()) - 1.0) > 1e-9:  # explicit check: asserts vanish under python -O
+    raise RuntimeError("bank-readiness WEIGHTS must sum to 1.0")
 
 TIER_THRESHOLDS: list[tuple[float, BankReadinessTier]] = [
     (75.0, BankReadinessTier.prime),
