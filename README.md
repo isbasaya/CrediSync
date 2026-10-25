@@ -95,22 +95,19 @@ Flutter: `cd mobile && flutter test`.
 
 ## Open items before go-live
 
-These need a person or a contract; the code is ready for them but deliberately does not guess.
+The code side is complete; what remains needs a person, a contract or an AWS account. The full list,
+with owners to fill in, is [docs/go-live-checklist.md](docs/go-live-checklist.md). Supporting packs:
 
-1. **Legal review of dispute letters.** Citations live in
-   `services/dispute-engine/src/templates/legal-references.ts` (currently NCA s72 + POPIA s24, Credit
-   Ombud → NCR). Letters carry a draft notice and production refuses to generate them until
-   `LEGAL_REVIEW.reviewed` is set.
-2. **Bureau contacts and contracts.** Verified dispute channels (`BUREAU_DISPUTE_CONTACTS`), real
-   API field names and status vocabularies (adapters and `status-mapping.ts`), per-bureau score
-   ranges (`BUREAU_SCORE_RANGES`) and webhook secrets.
-3. **Open-banking provider integration.** The Stitch GraphQL query and Ozow payloads are placeholders;
-   the server-side OAuth/link flow that produces `accountLinkToken` is still to be built.
-4. **Confirm regulatory figures:** NCA expense-norm table (`NCA_EXPENSE_NORMS`), retention periods in
-   `packages/jobs/src/jobs.ts`, and the response-period citation.
-5. **Infrastructure:** KMS key, S3 evidence bucket and Secrets Manager in `af-south-1`; per-service
-   database login users in `credisync_app`; a shared rate-limit store (Redis) once there is more
-   than one gateway replica; a scheduler for `packages/jobs`.
-6. **Not built yet:** PDF rendering of letters, a real email/SMS provider, a bureau dispute API
-   channel (`DISPUTE_SUBMISSION_CHANNEL=bureau_api`), event streaming (Kafka/SQS) and
-   infrastructure-as-code.
+- [Legal review pack](docs/legal-review-pack.md) — dispute letter, consent wording and retention, with
+  numbered questions for counsel. Production refuses to generate letters until sign-off is recorded.
+- [Bureau and provider integration checklist](docs/bureau-integration-checklist.md) — what to get from
+  each bureau and Stitch, and exactly where each item goes in the code.
+- [Regulatory figures](docs/regulatory-figures.md) — NCA expense norms, response period, retention
+  periods and score bands, each configurable, with a sign-off table.
+- [Infrastructure runbook](infra/terraform/README.md) — Terraform for ECS Fargate in af-south-1,
+  bootstrap and deploy steps.
+
+Built and ready: transactional outbox to SNS, SES email (af-south-1), PDF letters (consumer and
+audited lodging copies), Redis rate limiting, the Stitch consent flow (OAuth 2.0 + PKCE) with token
+refresh, and Terraform with CI validation and security scanning. Deliberately not built: SMS (email
+only for now) and a bureau dispute API channel (manual lodging until bureaus offer one).

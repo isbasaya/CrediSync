@@ -1,3 +1,4 @@
+import { createRedisRateLimitStore } from './redis-store';
 import type { NextFunction, Request, Response } from 'express';
 
 export interface RateLimitConfig {
@@ -73,9 +74,6 @@ let sharedStore: RateLimitStore | null = null;
 export function defaultRateLimitStore(env: NodeJS.ProcessEnv = process.env): RateLimitStore {
   if (!sharedStore) {
     if (env.REDIS_URL) {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { createRedisRateLimitStore } =
-        require('./redis-store') as typeof import('./redis-store');
       sharedStore = createRedisRateLimitStore(env.REDIS_URL);
     } else {
       sharedStore = new MemoryRateLimitStore();
