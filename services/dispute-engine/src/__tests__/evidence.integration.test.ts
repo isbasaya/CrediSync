@@ -108,6 +108,17 @@ describe.skipIf(!testDatabaseAvailable)('dispute evidence (real Postgres)', () =
       )
     ).rows[0]?.status;
 
+  const expireLink = (evidenceId: string) =>
+    db.adminPool.query(
+      "UPDATE credisync.dispute_evidence SET upload_url_expires_at = NOW() - interval '1 second' WHERE id = $1",
+      [evidenceId],
+    );
+  const ageRow = (evidenceId: string, age: string) =>
+    db.adminPool.query(
+      'UPDATE credisync.dispute_evidence SET created_at = NOW() - $2::interval WHERE id = $1',
+      [evidenceId, age],
+    );
+
   async function upload(
     user: string,
     disputeId: string,
@@ -167,7 +178,8 @@ describe.skipIf(!testDatabaseAvailable)('dispute evidence (real Postgres)', () =
     expect(res.body.message).toBeTruthy();
     expect(JSON.stringify(res.body)).not.toContain('uploads/');
     expect(storage.has(key)).toBe(false);
-    expect(await statusOf(up.evidence.id)).toBeUndefined();
+    // The upload link is still live, so the row stays as the handle on the object.
+    expect(await statusOf(up.evidence.id)).toBe('deleting');
     const audit = await db.adminPool.query(
       "SELECT payload FROM credisync.regulatory_audit_logs WHERE event_type = 'data_deletion_completed' AND payload->>'evidence_id' = $1",
       [up.evidence.id],
@@ -214,6 +226,70 @@ describe.skipIf(!testDatabaseAvailable)('dispute evidence (real Postgres)', () =
     expect(verified.body.error).toBe('not_pending');
   });
 
+  it('re-putting through a live link after rejection leaves a deleting row to find it by', async () => {
+    const draftId = await newDraft();
+    const up = await upload(ALICE, draftId, SPOOF, { complete: false });
+    const key = await keyOf(up.evidence.id);
+    expect((await complete(ALICE, draftId, up.evidence.id)).status).toBe(400);
+    expect(storage.has(key)).toBe(false);
+    storage.put(key, SPOOF, 'application/pdf'); // replay of the still-valid link
+    expect(await statusOf(up.evidence.id)).toBe('deleting');
+    const rows = [{ id: up.evidence.id, storage_key: key }];
+    await eraseMarked(db.pool, rows);
+    expect(storage.has(key)).toBe(false);
+    expect(await statusOf(up.evidence.id)).toBe('deleting');
+  });
+
+  it('fully removes a rejected row whose link has expired', async () => {
+    const draftId = await newDraft();
+    const up = await upload(ALICE, draftId, SPOOF, { complete: false });
+    await expireLink(up.evidence.id);
+    expect((await complete(ALICE, draftId, up.evidence.id)).status).toBe(400);
+    expect(await statusOf(up.evidence.id)).toBeUndefined();
+  });
+
+  it('refuses retry and complete past 24 hours with 410 and erases the row', async () => {
+    const draftId = await newDraft();
+    const a = await upload(ALICE, draftId, PDF, { complete: false });
+    await ageRow(a.evidence.id, '25 hours');
+    await expireLink(a.evidence.id);
+    const r = await request(app)
+      .post(`/disputes/${draftId}/evidence/${a.evidence.id}/retry`)
+      .set(as(ALICE));
+    expect(r.status).toBe(410);
+    expect(r.body.error).toBe('evidence_upload_expired');
+    expect(r.body.message).toBe('This upload has expired. Please add the file again.');
+    expect(await statusOf(a.evidence.id)).toBeUndefined();
+
+    const b = await upload(ALICE, draftId, PDF, { complete: false });
+    const key = await keyOf(b.evidence.id);
+    await ageRow(b.evidence.id, '25 hours');
+    await expireLink(b.evidence.id);
+    const c = await complete(ALICE, draftId, b.evidence.id);
+    expect(c.status).toBe(410);
+    expect(c.body.error).toBe('evidence_upload_expired');
+    expect(storage.has(key)).toBe(false);
+    expect(await statusOf(b.evidence.id)).toBeUndefined();
+  });
+
+  it('caps a retry link at the time left in the 24-hour window', async () => {
+    const draftId = await newDraft();
+    const up = await upload(ALICE, draftId, PDF, { complete: false });
+    await ageRow(up.evidence.id, '23 hours 55 minutes');
+    await expireLink(up.evidence.id); // the first link has lapsed
+    const r = await request(app)
+      .post(`/disputes/${draftId}/evidence/${up.evidence.id}/retry`)
+      .set(as(ALICE));
+    expect(r.status).toBe(200);
+    expect(r.body.expiresIn).toBeLessThanOrEqual(300);
+    expect(r.body.expiresIn).toBeGreaterThan(0);
+    const stored = await db.adminPool.query(
+      "SELECT upload_url_expires_at <= created_at + interval '24 hours' + interval '2 seconds' AS ok FROM credisync.dispute_evidence WHERE id = $1",
+      [up.evidence.id],
+    );
+    expect(stored.rows[0].ok).toBe(true);
+  });
+
   it('keeps a failed erase as deleting so it can be retried', async () => {
     const draftId = await newDraft();
     const up = await upload(ALICE, draftId, SPOOF, { complete: false });
@@ -226,6 +302,9 @@ describe.skipIf(!testDatabaseAvailable)('dispute evidence (real Postgres)', () =
       "SELECT id, storage_key FROM credisync.dispute_evidence WHERE id = $1 AND status = 'deleting'",
       [up.evidence.id],
     );
+    await eraseMarked(db.pool, rows.rows);
+    expect(await statusOf(up.evidence.id)).toBe('deleting'); // link still live
+    await expireLink(up.evidence.id);
     await eraseMarked(db.pool, rows.rows);
     expect(await statusOf(up.evidence.id)).toBeUndefined();
   });
@@ -243,8 +322,11 @@ describe.skipIf(!testDatabaseAvailable)('dispute evidence (real Postgres)', () =
       [[a.evidence.id, b.evidence.id]],
     );
     expect(audit.rowCount).toBe(2);
+    await expireLink(a.evidence.id);
+    await expireLink(b.evidence.id);
     await eraseMarked(db.pool, rows);
     expect(await statusOf(a.evidence.id)).toBeUndefined();
+    expect(await statusOf(b.evidence.id)).toBeUndefined();
   });
 
   it('blocks sending with a pending upload, then allows it once resolved', async () => {
@@ -318,7 +400,7 @@ describe.skipIf(!testDatabaseAvailable)('dispute evidence (real Postgres)', () =
     ]);
     expect((await complete(ALICE, racedDraft, up.evidence.id)).status).toBe(409);
     expect(storage.has(key)).toBe(false);
-    expect(await statusOf(up.evidence.id)).toBeUndefined();
+    expect(await statusOf(up.evidence.id)).toBe('deleting');
   });
 
   it('refuses new uploads once the dispute was sent', async () => {

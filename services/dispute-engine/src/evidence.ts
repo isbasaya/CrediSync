@@ -24,6 +24,16 @@ import type { DisputeRecord } from './types';
 const logger = pino({ name: 'dispute-evidence' });
 
 export const MAX_EVIDENCE_FILES = 10;
+/** A pending upload must be completed within this window of its creation. */
+const UPLOAD_WINDOW_HOURS = 24;
+const MAX_LINK_SECONDS = 15 * 60;
+
+const uploadExpired = () =>
+  new DisputeError(
+    410,
+    'evidence_upload_expired',
+    'This upload has expired. Please add the file again.',
+  );
 
 type Row = Record<string, unknown>;
 
@@ -163,8 +173,9 @@ export async function markEvidenceDeleting(
 }
 
 /**
- * Deletes the object, then the row. Never throws: a failure leaves the row
- * 'deleting' so the scheduled job retries it. Logs only the evidence id.
+ * Deletes the object, then the row once its upload link has expired. Never throws: a
+ * failure, or a link that may still be live, leaves the row 'deleting' so the scheduled
+ * job deletes the object again later. Logs only the evidence id.
  */
 export async function eraseMarked(
   pool: Pool,
@@ -172,11 +183,15 @@ export async function eraseMarked(
 ): Promise<void> {
   for (const row of rows) {
     try {
+      // Always attempt the delete. The row (our only handle on the object) goes only once
+      // no issued upload link can still recreate the object; until then the job retries.
       await deleteEvidenceObject(row.storage_key);
       await withSystem(pool, (c) =>
-        c.query("DELETE FROM credisync.dispute_evidence WHERE id = $1 AND status = 'deleting'", [
-          row.id,
-        ]),
+        c.query(
+          `DELETE FROM credisync.dispute_evidence
+           WHERE id = $1 AND status = 'deleting' AND upload_url_expires_at <= NOW()`,
+          [row.id],
+        ),
       );
     } catch (err) {
       logger.warn(
@@ -227,8 +242,8 @@ export async function requestEvidenceUpload(
 
     const inserted = await client.query(
       `INSERT INTO credisync.dispute_evidence
-         (user_id, dispute_id, storage_key, content_type, size_bytes, display_name)
-       VALUES ($1, $2, $3, $4, $5, $6)
+         (user_id, dispute_id, storage_key, content_type, size_bytes, display_name, upload_url_expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW() + $7 * interval '1 second')
        RETURNING id, display_name, content_type, size_bytes, status`,
       [
         userId,
@@ -237,6 +252,7 @@ export async function requestEvidenceUpload(
         input.contentType,
         input.contentLength,
         sanitizeDisplayName(input.fileName),
+        presigned.expiresIn,
       ],
     );
     return {
@@ -259,7 +275,11 @@ const FAILURE_MESSAGES: Record<
 type Outcome =
   | { kind: 'done'; record: DisputeRecord }
   | { kind: 'not_uploaded' }
-  | { kind: 'refused'; notDraft: boolean; erase: Array<{ id: string; storage_key: string }> };
+  | {
+      kind: 'refused';
+      reason: 'not_draft' | 'invalid' | 'expired';
+      erase: Array<{ id: string; storage_key: string }>;
+    };
 
 async function loadRecord(client: PoolClient, locked: Row): Promise<DisputeRecord> {
   return toRecord(locked, await listEvidence(client, locked.id as string));
@@ -298,8 +318,9 @@ export async function completeEvidenceUpload(
     const dispute = d.rows[0];
     if (!dispute) throw notFound();
 
-    const e = await client.query<{ status: string }>(
-      'SELECT status FROM credisync.dispute_evidence WHERE id = $1 AND dispute_id = $2 FOR UPDATE',
+    const e = await client.query<{ status: string; expired: boolean }>(
+      `SELECT status, created_at + interval '${UPLOAD_WINDOW_HOURS} hours' <= NOW() AS expired
+       FROM credisync.dispute_evidence WHERE id = $1 AND dispute_id = $2 FOR UPDATE`,
       [evidenceId, disputeId],
     );
     const current = e.rows[0];
@@ -310,6 +331,14 @@ export async function completeEvidenceUpload(
       return { kind: 'done', record: await loadRecord(client, dispute) };
     }
 
+    if (current.expired) {
+      return {
+        kind: 'refused',
+        reason: 'expired',
+        erase: await markEvidenceDeleting(client, { evidenceId }),
+      };
+    }
+
     const missing =
       dispute.status === 'draft' && verification?.ok === false && verification.reason === 'missing';
     // An interrupted or expired upload stays pending so the user can retry or remove it.
@@ -318,7 +347,7 @@ export async function completeEvidenceUpload(
     if (dispute.status !== 'draft' || !verification || !verification.ok) {
       return {
         kind: 'refused',
-        notDraft: dispute.status !== 'draft',
+        reason: dispute.status !== 'draft' ? 'not_draft' : 'invalid',
         erase: await markEvidenceDeleting(client, { evidenceId }),
       };
     }
@@ -343,7 +372,8 @@ export async function completeEvidenceUpload(
   }
 
   await eraseMarked(pool, outcome.erase);
-  if (!outcome.notDraft && verification && !verification.ok) {
+  if (outcome.reason === 'expired') throw uploadExpired();
+  if (outcome.reason === 'invalid' && verification && !verification.ok) {
     throw new DisputeError(
       400,
       'invalid_evidence',
@@ -365,32 +395,56 @@ export async function retryEvidenceUpload(
   requiredHeaders: Record<string, string>;
   expiresIn: number;
 }> {
-  const row = await withUser(pool, userId, async (client) => {
+  const found = await withUser(pool, userId, async (client) => {
     const d = await client.query<{ status: string }>(
       'SELECT status FROM credisync.disputes WHERE id = $1',
       [disputeId],
     );
     if (!d.rows[0]) throw notFound();
     const e = await client.query(
-      `SELECT id, display_name, content_type, size_bytes, status, storage_key
+      `SELECT id, display_name, content_type, size_bytes, status, storage_key,
+              floor(extract(epoch FROM created_at + interval '${UPLOAD_WINDOW_HOURS} hours' - NOW()))::int AS remaining
        FROM credisync.dispute_evidence WHERE id = $1 AND dispute_id = $2`,
       [evidenceId, disputeId],
     );
-    const found = e.rows[0];
-    if (!found || found.status === 'deleting') throw notFound();
+    const row = e.rows[0];
+    if (!row || row.status === 'deleting') throw notFound();
     if (d.rows[0].status !== 'draft') throw notEditable();
-    if (found.status !== 'pending') {
+    if (row.status !== 'pending') {
       throw new DisputeError(409, 'not_pending', 'This file has already been uploaded');
     }
-    return found;
+    return row;
   });
+
+  if ((found.remaining as number) <= 0) {
+    // Past its window: queue, erase, and report. Re-check under lock so a race cannot erase a live row.
+    const erase = await withUser(pool, userId, (client) =>
+      markEvidenceDeleting(client, { evidenceId }),
+    );
+    await eraseMarked(pool, erase);
+    throw uploadExpired();
+  }
+
+  // The link never outlives the row's 24-hour window.
+  const expiresIn = Math.min(MAX_LINK_SECONDS, found.remaining as number);
   const presigned = await createEvidenceRetryUpload(
-    row.storage_key as string,
-    row.content_type as string,
-    Number(row.size_bytes),
+    found.storage_key as string,
+    found.content_type as string,
+    Number(found.size_bytes),
+    expiresIn,
   );
+  // Recorded after signing, so the stored time is never earlier than the link's real expiry.
+  const recorded = await withUser(pool, userId, (client) =>
+    client.query(
+      `UPDATE credisync.dispute_evidence
+       SET upload_url_expires_at = GREATEST(upload_url_expires_at, NOW() + $2 * interval '1 second')
+       WHERE id = $1 AND status = 'pending'`,
+      [evidenceId, presigned.expiresIn],
+    ),
+  );
+  if (!recorded.rowCount) throw notFound();
   return {
-    evidence: toEvidence(row),
+    evidence: toEvidence(found),
     uploadUrl: presigned.uploadUrl,
     requiredHeaders: presigned.requiredHeaders,
     expiresIn: presigned.expiresIn,

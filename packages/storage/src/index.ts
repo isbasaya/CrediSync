@@ -25,6 +25,7 @@ export async function createEvidenceUpload(
   userId: string,
   contentType: string,
   contentLength: number,
+  expiresIn: number = UPLOAD_URL_TTL_SECONDS,
 ): Promise<PresignedUpload> {
   const ext = ALLOWED_EVIDENCE_TYPES[contentType];
   if (!ext) throw new EvidenceValidationError('Upload a PDF, JPEG or PNG file');
@@ -36,7 +37,7 @@ export async function createEvidenceUpload(
     throw new EvidenceValidationError('Files must be smaller than 10 MB');
   }
   const key = `${userPrefix(userId)}${randomUUID()}.${ext}`;
-  return current().presignUpload(key, contentType, contentLength, UPLOAD_URL_TTL_SECONDS);
+  return current().presignUpload(key, contentType, contentLength, expiresIn);
 }
 
 /** POPIA erasure: removes every object the user uploaded. */
@@ -52,6 +53,7 @@ export async function createEvidenceRetryUpload(
   key: string,
   contentType: string,
   contentLength: number,
+  expiresIn: number = UPLOAD_URL_TTL_SECONDS,
 ): Promise<PresignedUpload> {
-  return current().presignUpload(key, contentType, contentLength, UPLOAD_URL_TTL_SECONDS);
+  return current().presignUpload(key, contentType, contentLength, expiresIn);
 }

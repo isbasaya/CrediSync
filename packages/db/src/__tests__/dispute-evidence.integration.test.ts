@@ -29,8 +29,8 @@ describe.skipIf(!testDatabaseAvailable)('dispute_evidence schema (real Postgres)
       ...over,
     };
     return c.query(
-      `INSERT INTO credisync.dispute_evidence (user_id, dispute_id, storage_key, content_type, size_bytes, display_name)
-       VALUES ($1,$2,$3,$4,$5,$6)`,
+      `INSERT INTO credisync.dispute_evidence (user_id, dispute_id, storage_key, content_type, size_bytes, display_name, upload_url_expires_at)
+       VALUES ($1,$2,$3,$4,$5,$6, NOW() + interval '15 minutes')`,
       [v.user_id, v.dispute_id, v.storage_key, v.content_type, v.size_bytes, v.display_name],
     );
   };

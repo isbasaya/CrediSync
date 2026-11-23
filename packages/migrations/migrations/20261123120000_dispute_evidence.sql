@@ -24,7 +24,10 @@ CREATE TABLE dispute_evidence (
     status                evidence_status NOT NULL DEFAULT 'pending',
     created_at            TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
     verified_at           TIMESTAMPTZ,
-    deletion_requested_at TIMESTAMPTZ
+    deletion_requested_at TIMESTAMPTZ,
+    -- Latest moment an issued upload link can still be used. The object is only
+    -- considered gone, and the row removable, once this has passed.
+    upload_url_expires_at TIMESTAMPTZ     NOT NULL
 );
 
 CREATE INDEX idx_dispute_evidence_dispute ON dispute_evidence (dispute_id);
