@@ -1,4 +1,4 @@
-import { current, MAX_EVIDENCE_BYTES } from './index';
+import { current, MAX_EVIDENCE_BYTES } from './provider';
 
 const DOWNLOAD_URL_TTL_SECONDS = 5 * 60;
 const MAX_NAME_LENGTH = 120;
@@ -37,8 +37,7 @@ export function sanitizeDisplayName(raw: string): string {
 }
 
 export type EvidenceVerification =
-  | { ok: true; size: number }
-  | { ok: false; reason: 'missing' | 'too_large' | 'type_mismatch' };
+  { ok: true; size: number } | { ok: false; reason: 'missing' | 'too_large' | 'type_mismatch' };
 
 /** Checks an uploaded object exists, is within the size limit and really is the declared type. */
 export async function verifyEvidenceObject(

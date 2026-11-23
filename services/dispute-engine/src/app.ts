@@ -189,6 +189,18 @@ export function createApp(pool: Pool) {
   );
 
   app.post(
+    '/disputes/:id/evidence/:evidenceId/retry',
+    asyncHandler(async (req, res) => {
+      const evidenceId = uuid.safeParse(req.params.evidenceId);
+      if (!evidenceId.success)
+        throw new service.DisputeError(404, 'not_found', 'Evidence not found');
+      return res.json(
+        await evidence.retryEvidenceUpload(pool, req.actingUserId!, param(req), evidenceId.data),
+      );
+    }),
+  );
+
+  app.post(
     '/disputes/:id/regenerate-letter',
     asyncHandler(async (req, res) => {
       const parsed = regenerateSchema.safeParse(req.body);

@@ -179,12 +179,39 @@ describe.skipIf(!testDatabaseAvailable)('dispute evidence (real Postgres)', () =
     });
   });
 
-  it('rejects a file that never arrived', async () => {
+  it('keeps a file that never arrived pending, and retry issues a fresh link', async () => {
     const draftId = await newDraft();
     const res = await requestUpload(ALICE, draftId);
-    const done = await complete(ALICE, draftId, res.body.evidence.id);
-    expect(done.status).toBe(400);
-    expect(done.body.error).toBe('invalid_evidence');
+    const id = res.body.evidence.id;
+    const done = await complete(ALICE, draftId, id);
+    expect(done.status).toBe(409);
+    expect(done.body.error).toBe('evidence_not_uploaded');
+    expect(await statusOf(id)).toBe('pending');
+    const submit = await request(app).post(`/disputes/${draftId}/submit`).set(as(ALICE));
+    expect(submit.body.error).toBe('evidence_pending');
+
+    const retry = await request(app)
+      .post(`/disputes/${draftId}/evidence/${id}/retry`)
+      .set(as(ALICE));
+    expect(retry.status).toBe(200);
+    expect(retry.body.evidence.id).toBe(id);
+    expect(retry.body.uploadUrl).toContain(await keyOf(id));
+    expect(retry.body.expiresIn).toBeGreaterThan(0);
+    expect(retry.body.requiredHeaders).toBeTruthy();
+
+    storage.put(await keyOf(id), PDF, 'application/pdf');
+    expect((await complete(ALICE, draftId, id)).status).toBe(200);
+  });
+
+  it('retry is hidden from other users and refused for non-pending rows', async () => {
+    const draftId = await newDraft();
+    const up = await upload(ALICE, draftId, PDF, { complete: false });
+    const url = `/disputes/${draftId}/evidence/${up.evidence.id}/retry`;
+    expect((await request(app).post(url).set(as(MALLORY))).status).toBe(404);
+    await complete(ALICE, draftId, up.evidence.id);
+    const verified = await request(app).post(url).set(as(ALICE));
+    expect(verified.status).toBe(409);
+    expect(verified.body.error).toBe('not_pending');
   });
 
   it('keeps a failed erase as deleting so it can be retried', async () => {

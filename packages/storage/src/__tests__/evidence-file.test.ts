@@ -18,9 +18,9 @@ describe('evidence file primitives', () => {
   it('identifies real files by signature', () => {
     expect(sniffEvidenceType(Buffer.from('%PDF-1.7'))).toBe('application/pdf');
     expect(sniffEvidenceType(Buffer.from([0xff, 0xd8, 0xff, 0xe0]))).toBe('image/jpeg');
-    expect(
-      sniffEvidenceType(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])),
-    ).toBe('image/png');
+    expect(sniffEvidenceType(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))).toBe(
+      'image/png',
+    );
     expect(sniffEvidenceType(Buffer.from('MZ\x90\x00'))).toBeNull();
   });
 

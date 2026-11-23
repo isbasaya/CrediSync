@@ -88,7 +88,9 @@ describe('S3StorageProvider', () => {
       });
     stub(Object.assign(new Error('x'), { name: 'NotFound', $metadata: { httpStatusCode: 404 } }));
     expect(await p.headObject('k')).toBeNull();
-    stub(Object.assign(new Error('x'), { name: 'AccessDenied', $metadata: { httpStatusCode: 403 } }));
+    stub(
+      Object.assign(new Error('x'), { name: 'AccessDenied', $metadata: { httpStatusCode: 403 } }),
+    );
     await expect(p.headObject('k')).rejects.toThrow();
   });
 });

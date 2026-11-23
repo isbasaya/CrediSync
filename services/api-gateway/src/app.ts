@@ -231,6 +231,17 @@ export function createApp(pool: Pool, config: GatewayConfig = loadConfig()) {
     ),
   );
   app.post(
+    '/api/disputes/:id/evidence/:evidenceId/retry',
+    asyncHandler((req, res) =>
+      forward(
+        config.disputeEngineUrl,
+        `/disputes/${id(req)}/evidence/${encodeURIComponent(String(req.params.evidenceId))}/retry`,
+        req,
+        res,
+      ),
+    ),
+  );
+  app.post(
     '/api/disputes/:id/evidence/:evidenceId/complete',
     asyncHandler((req, res) =>
       forward(

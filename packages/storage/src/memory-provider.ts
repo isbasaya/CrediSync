@@ -1,4 +1,4 @@
-import type { PresignedUpload, StorageProvider } from './index';
+import type { PresignedUpload, StorageProvider } from './provider';
 
 /** In-memory provider for tests; never selected automatically. */
 export class InMemoryStorageProvider implements StorageProvider {

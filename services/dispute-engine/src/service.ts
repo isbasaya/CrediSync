@@ -82,8 +82,11 @@ export async function getDispute(pool: Pool, userId: string, id: string): Promis
     const r = await client.query(`${SELECT_DISPUTE} WHERE d.id = $1`, [id]);
     let row = r.rows[0];
     if (!row) throw notFound();
-    if (row.status === 'draft') {
-      // Reconcile the letter with the verified files (the job may have removed some).
+    if (
+      row.status === 'draft' &&
+      (await hasVerifiedEvidence(client, id)) !== Boolean(row.letter_has_evidence)
+    ) {
+      // Out of step (the job removed files): lock, re-check, then regenerate.
       const locked = await client.query(`${SELECT_DISPUTE} WHERE d.id = $1 FOR UPDATE OF d`, [id]);
       if (!locked.rows[0]) throw notFound();
       row = await syncDraftLetter(client, locked.rows[0]);

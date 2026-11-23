@@ -3,6 +3,7 @@ import pino from 'pino';
 import { withSystem, withUser, writeAudit } from '@credisync/db';
 import type { DisputeEvidence } from '@credisync/types';
 import {
+  createEvidenceRetryUpload,
   createEvidenceUpload,
   deleteEvidenceObject,
   sanitizeDisplayName,
@@ -247,14 +248,17 @@ export async function requestEvidenceUpload(
   });
 }
 
-const FAILURE_MESSAGES: Record<Extract<EvidenceVerification, { ok: false }>['reason'], string> = {
-  missing: 'We could not find your uploaded file. Please try uploading it again.',
+const FAILURE_MESSAGES: Record<
+  Exclude<Extract<EvidenceVerification, { ok: false }>['reason'], 'missing'>,
+  string
+> = {
   too_large: 'That file is too large. Files must be smaller than 10 MB.',
   type_mismatch: 'That file is not a valid PDF, JPEG or PNG. Please choose a different file.',
 };
 
 type Outcome =
   | { kind: 'done'; record: DisputeRecord }
+  | { kind: 'not_uploaded' }
   | { kind: 'refused'; notDraft: boolean; erase: Array<{ id: string; storage_key: string }> };
 
 async function loadRecord(client: PoolClient, locked: Row): Promise<DisputeRecord> {
@@ -306,6 +310,11 @@ export async function completeEvidenceUpload(
       return { kind: 'done', record: await loadRecord(client, dispute) };
     }
 
+    const missing =
+      dispute.status === 'draft' && verification?.ok === false && verification.reason === 'missing';
+    // An interrupted or expired upload stays pending so the user can retry or remove it.
+    if (missing) return { kind: 'not_uploaded' };
+
     if (dispute.status !== 'draft' || !verification || !verification.ok) {
       return {
         kind: 'refused',
@@ -325,10 +334,65 @@ export async function completeEvidenceUpload(
   });
 
   if (outcome.kind === 'done') return outcome.record;
+  if (outcome.kind === 'not_uploaded') {
+    throw new DisputeError(
+      409,
+      'evidence_not_uploaded',
+      "We haven't received this file yet. Try uploading it again.",
+    );
+  }
 
   await eraseMarked(pool, outcome.erase);
   if (!outcome.notDraft && verification && !verification.ok) {
-    throw new DisputeError(400, 'invalid_evidence', FAILURE_MESSAGES[verification.reason]);
+    throw new DisputeError(
+      400,
+      'invalid_evidence',
+      FAILURE_MESSAGES[verification.reason as 'too_large' | 'type_mismatch'],
+    );
   }
   throw notEditable();
+}
+
+/** A fresh upload link for a pending file on a draft, because the first link may have expired. */
+export async function retryEvidenceUpload(
+  pool: Pool,
+  userId: string,
+  disputeId: string,
+  evidenceId: string,
+): Promise<{
+  evidence: DisputeEvidence;
+  uploadUrl: string;
+  requiredHeaders: Record<string, string>;
+  expiresIn: number;
+}> {
+  const row = await withUser(pool, userId, async (client) => {
+    const d = await client.query<{ status: string }>(
+      'SELECT status FROM credisync.disputes WHERE id = $1',
+      [disputeId],
+    );
+    if (!d.rows[0]) throw notFound();
+    const e = await client.query(
+      `SELECT id, display_name, content_type, size_bytes, status, storage_key
+       FROM credisync.dispute_evidence WHERE id = $1 AND dispute_id = $2`,
+      [evidenceId, disputeId],
+    );
+    const found = e.rows[0];
+    if (!found || found.status === 'deleting') throw notFound();
+    if (d.rows[0].status !== 'draft') throw notEditable();
+    if (found.status !== 'pending') {
+      throw new DisputeError(409, 'not_pending', 'This file has already been uploaded');
+    }
+    return found;
+  });
+  const presigned = await createEvidenceRetryUpload(
+    row.storage_key as string,
+    row.content_type as string,
+    Number(row.size_bytes),
+  );
+  return {
+    evidence: toEvidence(row),
+    uploadUrl: presigned.uploadUrl,
+    requiredHeaders: presigned.requiredHeaders,
+    expiresIn: presigned.expiresIn,
+  };
 }
