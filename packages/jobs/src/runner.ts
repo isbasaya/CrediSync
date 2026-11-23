@@ -3,6 +3,7 @@ import { createPool } from '@credisync/db';
 import {
   runDeletionRequests,
   runDisputeDeadlineMonitor,
+  runEvidenceMaintenance,
   runPartitionMaintenance,
   runRetention,
 } from './jobs';
@@ -14,6 +15,7 @@ import { assertEmailConfigured } from '@credisync/notifications';
  *   jobs outbox       every minute (relays domain events to SNS)
  *   jobs deadlines    hourly
  *   jobs deletions    hourly
+ *   jobs evidence     daily
  *   jobs retention    daily
  *   jobs partitions   monthly (idempotent)
  *   jobs all          everything, in a safe order
@@ -41,10 +43,14 @@ async function main(): Promise<void> {
       case 'deletions':
         await runDeletionRequests(pool);
         break;
+      case 'evidence':
+        await runEvidenceMaintenance(pool);
+        break;
       case 'all':
         await runPartitionMaintenance(pool);
         await runDisputeDeadlineMonitor(pool);
         await runDeletionRequests(pool);
+        await runEvidenceMaintenance(pool);
         await runRetention(pool);
         await drainOutbox(pool);
         break;

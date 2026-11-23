@@ -182,6 +182,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "evidence" {
     noncurrent_version_expiration {
       noncurrent_days = 7
     }
+    # Clears delete markers left once all versions of an erased object have expired.
+    expiration {
+      expired_object_delete_marker = true
+    }
     abort_incomplete_multipart_upload {
       days_after_initiation = 1
     }

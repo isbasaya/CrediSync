@@ -1,8 +1,8 @@
 import type { Pool } from 'pg';
 import pino from 'pino';
-import { withSystem, writeAudit, enqueueEvent } from '@credisync/db';
+import { withSystem, writeAudit, enqueueEvent, finishEvidenceErasure } from '@credisync/db';
 import { sendEmail } from '@credisync/notifications';
-import { deleteUserFiles } from '@credisync/storage';
+import { deleteUserFiles, deleteEvidenceObject } from '@credisync/storage';
 
 const logger = pino({ name: 'jobs' });
 
@@ -18,6 +18,7 @@ export const RETENTION = {
   transactionMonths: Number(process.env.TRANSACTION_RETENTION_MONTHS ?? 24),
   supersededProfileMonths: Number(process.env.PROFILE_HISTORY_RETENTION_MONTHS ?? 24),
   auditLogYears: 5,
+  evidenceMonths: Number(process.env.EVIDENCE_RETENTION_MONTHS ?? 24),
 } as const;
 
 export async function runRetention(pool: Pool): Promise<Record<string, number>> {
@@ -183,4 +184,147 @@ export async function runDeletionRequests(pool: Pool): Promise<number> {
   }
   logger.info({ completed, due: due.length }, 'deletion requests processed');
   return completed;
+}
+
+const EVIDENCE_BATCH = 200;
+const PENDING_WINDOW_HOURS = 24;
+const DRAFT_IDLE_DAYS = 90;
+
+/**
+ * Marks one batch of evidence 'deleting' and writes the same data_deletion_request audit
+ * event as the dispute engine's markEvidenceDeleting (this package cannot import the
+ * engine). `picked` selects dispute_evidence ids, locking them with FOR UPDATE.
+ * Short transaction; no storage calls.
+ */
+async function queueEvidenceBatch(pool: Pool, picked: string, params: unknown[]): Promise<number> {
+  return withSystem(pool, async (client) => {
+    const r = await client.query<{ id: string; user_id: string }>(
+      `UPDATE credisync.dispute_evidence
+       SET status = 'deleting', deletion_requested_at = NOW()
+       WHERE id IN (${picked})
+       RETURNING id, user_id`,
+      params,
+    );
+    for (const row of r.rows) {
+      await writeAudit(client, {
+        userId: row.user_id,
+        eventType: 'data_deletion_request',
+        resourceType: 'dispute_evidence',
+        resourceId: row.id,
+        payload: { action: 'delete_evidence', evidence_id: row.id },
+      });
+    }
+    return r.rows.length;
+  });
+}
+
+/** Queued rows leave the selection, so this ends when a batch comes back short. */
+async function queueAll(pool: Pool, picked: string, params: unknown[]): Promise<number> {
+  let total = 0;
+  for (;;) {
+    const n = await queueEvidenceBatch(pool, picked, params);
+    total += n;
+    if (n < EVIDENCE_BATCH) return total;
+  }
+}
+
+/**
+ * Evidence maintenance: queues rows for erasure (expired pending uploads, evidence on
+ * drafts idle 90 days, evidence past retention on resolved disputes), then attempts
+ * erasure of every 'deleting' row via finishEvidenceErasure. Comparisons use database
+ * time; `now` replaces NOW() in the queueing queries so tests are deterministic.
+ *
+ * expiredPending, staleDrafts and retained count rows newly queued. erased and failed
+ * come from the erasure phase. waiting counts rows attempted but left 'deleting' because
+ * an upload link may still be live (inside the margin): neither erased nor failed. Each
+ * 'deleting' row is attempted once per run (keyset paging), so a persistent storage
+ * failure cannot loop.
+ */
+export async function runEvidenceMaintenance(
+  pool: Pool,
+  now?: Date,
+): Promise<{
+  erased: number;
+  failed: number;
+  waiting: number;
+  expiredPending: number;
+  staleDrafts: number;
+  retained: number;
+}> {
+  const at = now ?? null;
+
+  const expiredPending = await queueAll(
+    pool,
+    `SELECT e.id FROM credisync.dispute_evidence e
+     WHERE e.status = 'pending'
+       AND e.created_at + make_interval(hours => $2) <= COALESCE($1::timestamptz, NOW())
+     ORDER BY e.id LIMIT ${EVIDENCE_BATCH} FOR UPDATE OF e SKIP LOCKED`,
+    [at, PENDING_WINDOW_HOURS],
+  );
+
+  // Idle = the later of the draft's last change and its newest non-deleting upload.
+  const staleDrafts = await queueAll(
+    pool,
+    `SELECT e.id FROM credisync.dispute_evidence e
+     JOIN credisync.disputes d ON d.id = e.dispute_id
+     WHERE e.status <> 'deleting' AND d.status = 'draft'
+       AND GREATEST(d.updated_at, (
+             SELECT max(x.created_at) FROM credisync.dispute_evidence x
+             WHERE x.dispute_id = d.id AND x.status <> 'deleting'))
+           <= COALESCE($1::timestamptz, NOW()) - make_interval(days => $2)
+     ORDER BY e.id LIMIT ${EVIDENCE_BATCH} FOR UPDATE OF e SKIP LOCKED`,
+    [at, DRAFT_IDLE_DAYS],
+  );
+
+  const retained = await queueAll(
+    pool,
+    `SELECT e.id FROM credisync.dispute_evidence e
+     JOIN credisync.disputes d ON d.id = e.dispute_id
+     WHERE e.status <> 'deleting'
+       AND d.status IN ('resolved_upheld', 'resolved_rejected', 'escalated_ncr')
+       AND COALESCE(d.ncr_escalated_at, d.resolved_at) IS NOT NULL
+       AND COALESCE(d.ncr_escalated_at, d.resolved_at) + make_interval(months => $2)
+           <= COALESCE($1::timestamptz, NOW())
+     ORDER BY e.id LIMIT ${EVIDENCE_BATCH} FOR UPDATE OF e SKIP LOCKED`,
+    [at, RETENTION.evidenceMonths],
+  );
+
+  // Resolved disputes with no usable date keep their files; only a count is logged.
+  const undated = await withSystem(pool, async (c) => {
+    const r = await c.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM credisync.dispute_evidence e
+       JOIN credisync.disputes d ON d.id = e.dispute_id
+       WHERE e.status <> 'deleting'
+         AND d.status IN ('resolved_upheld', 'resolved_rejected', 'escalated_ncr')
+         AND d.ncr_escalated_at IS NULL AND d.resolved_at IS NULL`,
+    );
+    return r.rows[0]?.n ?? 0;
+  });
+  if (undated > 0) logger.warn({ undated }, 'evidence kept: resolved disputes without a date');
+
+  let erased = 0;
+  let failed = 0;
+  let waiting = 0;
+  let after = '00000000-0000-0000-0000-000000000000';
+  for (;;) {
+    const batch = await withSystem(pool, async (c) => {
+      const r = await c.query<{ id: string; storage_key: string }>(
+        `SELECT id, storage_key FROM credisync.dispute_evidence
+         WHERE status = 'deleting' AND id > $1 ORDER BY id LIMIT ${EVIDENCE_BATCH}`,
+        [after],
+      );
+      return r.rows;
+    });
+    if (batch.length === 0) break;
+    after = batch[batch.length - 1]!.id;
+    const res = await finishEvidenceErasure(pool, batch, deleteEvidenceObject);
+    erased += res.erased.length;
+    failed += res.failed.length;
+    waiting += res.kept.length;
+    if (batch.length < EVIDENCE_BATCH) break;
+  }
+
+  const summary = { erased, failed, waiting, expiredPending, staleDrafts, retained };
+  logger.info(summary, 'evidence maintenance complete');
+  return summary;
 }

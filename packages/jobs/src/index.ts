@@ -3,6 +3,7 @@ export {
   runPartitionMaintenance,
   runDisputeDeadlineMonitor,
   runDeletionRequests,
+  runEvidenceMaintenance,
   RETENTION,
 } from './jobs';
 export {

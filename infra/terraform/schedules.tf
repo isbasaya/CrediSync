@@ -5,6 +5,7 @@ locals {
     outbox     = { expression = "rate(1 minute)", args = ["outbox"] }
     deadlines  = { expression = "cron(5 * * * ? *)", args = ["deadlines"] }
     deletions  = { expression = "cron(20 * * * ? *)", args = ["deletions"] }
+    evidence   = { expression = "cron(45 2 * * ? *)", args = ["evidence"] }
     retention  = { expression = "cron(30 2 * * ? *)", args = ["retention"] }
     partitions = { expression = "cron(0 3 1 * ? *)", args = ["partitions"] }
   }
