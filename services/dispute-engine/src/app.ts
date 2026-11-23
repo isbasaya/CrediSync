@@ -200,6 +200,31 @@ export function createApp(pool: Pool) {
     }),
   );
 
+  const evidenceParam = (req: Request): string => {
+    const parsed = uuid.safeParse(req.params.evidenceId);
+    if (!parsed.success) throw new service.DisputeError(404, 'not_found', 'Evidence not found');
+    return parsed.data;
+  };
+
+  app.get(
+    '/disputes/:id/evidence/:evidenceId/download-url',
+    asyncHandler(async (req, res) => {
+      res.setHeader('Cache-Control', 'no-store');
+      return res.json(
+        await evidence.evidenceDownloadUrl(pool, req.actingUserId!, param(req), evidenceParam(req)),
+      );
+    }),
+  );
+
+  app.delete(
+    '/disputes/:id/evidence/:evidenceId',
+    asyncHandler(async (req, res) =>
+      res.json(
+        await evidence.removeEvidence(pool, req.actingUserId!, param(req), evidenceParam(req)),
+      ),
+    ),
+  );
+
   app.post(
     '/disputes/:id/regenerate-letter',
     asyncHandler(async (req, res) => {
@@ -256,6 +281,22 @@ export function createApp(pool: Pool) {
       );
       res.setHeader('Cache-Control', 'no-store');
       return res.send(pdf);
+    }),
+  );
+
+  app.get(
+    '/admin/disputes/:id/evidence/:evidenceId/download-url',
+    requireOpsRole,
+    asyncHandler(async (req, res) => {
+      res.setHeader('Cache-Control', 'no-store');
+      return res.json(
+        await evidence.adminEvidenceDownloadUrl(
+          pool,
+          req.actingUserId!,
+          param(req),
+          evidenceParam(req),
+        ),
+      );
     }),
   );
 

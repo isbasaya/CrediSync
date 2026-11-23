@@ -209,6 +209,17 @@ export function createAdminRouter(pool: Pool, config: GatewayConfig): Router {
       ),
     ),
   );
+  router.get(
+    '/disputes/:id/evidence/:evidenceId/download-url',
+    asyncHandler((req, res) =>
+      forward(
+        disputeEngineUrl,
+        `/admin/disputes/${disputeId(req)}/evidence/${encodeURIComponent(String(req.params.evidenceId))}/download-url`,
+        req,
+        res,
+      ),
+    ),
+  );
   router.post(
     '/disputes/:id/bureau-reference',
     asyncHandler((req, res) =>

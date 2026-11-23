@@ -253,6 +253,28 @@ export function createApp(pool: Pool, config: GatewayConfig = loadConfig()) {
     ),
   );
   app.get(
+    '/api/disputes/:id/evidence/:evidenceId/download-url',
+    asyncHandler((req, res) =>
+      forward(
+        config.disputeEngineUrl,
+        `/disputes/${id(req)}/evidence/${encodeURIComponent(String(req.params.evidenceId))}/download-url`,
+        req,
+        res,
+      ),
+    ),
+  );
+  app.delete(
+    '/api/disputes/:id/evidence/:evidenceId',
+    asyncHandler((req, res) =>
+      forward(
+        config.disputeEngineUrl,
+        `/disputes/${id(req)}/evidence/${encodeURIComponent(String(req.params.evidenceId))}`,
+        req,
+        res,
+      ),
+    ),
+  );
+  app.get(
     '/api/disputes/:id',
     asyncHandler((req, res) => forward(config.disputeEngineUrl, `/disputes/${id(req)}`, req, res)),
   );

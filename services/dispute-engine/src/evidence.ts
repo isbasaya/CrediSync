@@ -3,6 +3,7 @@ import pino from 'pino';
 import { withSystem, withUser, writeAudit } from '@credisync/db';
 import type { DisputeEvidence } from '@credisync/types';
 import {
+  createEvidenceDownloadUrl,
   createEvidenceRetryUpload,
   createEvidenceUpload,
   deleteEvidenceObject,
@@ -418,9 +419,26 @@ export async function retryEvidenceUpload(
 
   if ((found.remaining as number) <= 0) {
     // Past its window: queue, erase, and report. Re-check under lock so a race cannot erase a live row.
-    const erase = await withUser(pool, userId, (client) =>
-      markEvidenceDeleting(client, { evidenceId }),
-    );
+    const erase = await withUser(pool, userId, async (client) => {
+      const d = await client.query<{ status: string }>(
+        'SELECT status FROM credisync.disputes WHERE id = $1 FOR UPDATE',
+        [disputeId],
+      );
+      if (!d.rows[0]) throw notFound();
+      const e = await client.query<{ status: string }>(
+        `SELECT status FROM credisync.dispute_evidence WHERE id = $1 AND dispute_id = $2 FOR UPDATE`,
+        [evidenceId, disputeId],
+      );
+      const current = e.rows[0];
+      if (!current || current.status === 'deleting') throw notFound();
+      if (d.rows[0].status !== 'draft') throw notEditable();
+      // A completion may have verified the file at the exact boundary: never queue that row.
+      // created_at never changes, so a still-pending row is still past its window.
+      if (current.status !== 'pending') {
+        throw new DisputeError(409, 'not_pending', 'This file has already been uploaded');
+      }
+      return markEvidenceDeleting(client, { evidenceId });
+    });
     await eraseMarked(pool, erase);
     throw uploadExpired();
   }
@@ -449,4 +467,106 @@ export async function retryEvidenceUpload(
     requiredHeaders: presigned.requiredHeaders,
     expiresIn: presigned.expiresIn,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Removal and downloads
+// ---------------------------------------------------------------------------
+
+/** Removes one file from a draft: queue, resync the letter, commit, then erase. */
+export async function removeEvidence(
+  pool: Pool,
+  userId: string,
+  disputeId: string,
+  evidenceId: string,
+): Promise<DisputeRecord> {
+  const { record, erase } = await withUser(pool, userId, async (client) => {
+    const d = await client.query(`${SELECT_DISPUTE} WHERE d.id = $1 FOR UPDATE OF d`, [disputeId]);
+    const dispute = d.rows[0];
+    if (!dispute) throw notFound();
+    if (dispute.status !== 'draft') throw notEditable();
+
+    const e = await client.query(
+      `SELECT 1 FROM credisync.dispute_evidence
+       WHERE id = $1 AND dispute_id = $2 AND status <> 'deleting'`,
+      [evidenceId, disputeId],
+    );
+    if (!e.rowCount) throw evidenceNotFound();
+
+    const marked = await markEvidenceDeleting(client, { evidenceId });
+    const synced = await syncDraftLetter(client, dispute);
+    return { record: await loadRecord(client, synced), erase: marked };
+  });
+  await eraseMarked(pool, erase);
+  return record;
+}
+
+const evidenceNotFound = () => new DisputeError(404, 'not_found', 'Evidence not found');
+
+/** A short-lived download link for a verified file; the owner's access is audited as data_access. */
+export async function evidenceDownloadUrl(
+  pool: Pool,
+  userId: string,
+  disputeId: string,
+  evidenceId: string,
+): Promise<{ url: string; expiresIn: 300 }> {
+  return withUser(pool, userId, async (client) => {
+    const r = await client.query<{ storage_key: string; display_name: string }>(
+      `SELECT storage_key, display_name FROM credisync.dispute_evidence
+       WHERE id = $1 AND dispute_id = $2 AND status = 'verified'`,
+      [evidenceId, disputeId],
+    );
+    const row = r.rows[0];
+    if (!row) throw evidenceNotFound();
+    await writeAudit(client, {
+      userId,
+      eventType: 'data_access',
+      resourceType: 'dispute_evidence',
+      resourceId: evidenceId,
+      payload: { action: 'download_evidence', evidence_id: evidenceId },
+    });
+    const url = await createEvidenceDownloadUrl(row.storage_key, row.display_name);
+    return { url, expiresIn: 300 };
+  });
+}
+
+/** Staff download of a verified file on a sent dispute, audited as admin_access. */
+export async function adminEvidenceDownloadUrl(
+  pool: Pool,
+  actorId: string,
+  disputeId: string,
+  evidenceId: string,
+): Promise<{ url: string; expiresIn: 300 }> {
+  return withSystem(pool, async (client) => {
+    const d = await client.query<{ status: string; user_id: string }>(
+      'SELECT status, user_id FROM credisync.disputes WHERE id = $1',
+      [disputeId],
+    );
+    const dispute = d.rows[0];
+    if (!dispute) throw notFound();
+    if (dispute.status === 'draft') {
+      throw new DisputeError(
+        409,
+        'not_submitted',
+        'Evidence is only available for disputes that have been sent',
+      );
+    }
+    const r = await client.query<{ storage_key: string; display_name: string }>(
+      `SELECT storage_key, display_name FROM credisync.dispute_evidence
+       WHERE id = $1 AND dispute_id = $2 AND status = 'verified'`,
+      [evidenceId, disputeId],
+    );
+    const row = r.rows[0];
+    if (!row) throw evidenceNotFound();
+    await writeAudit(client, {
+      userId: dispute.user_id,
+      performedBy: actorId,
+      eventType: 'admin_access',
+      resourceType: 'dispute_evidence',
+      resourceId: evidenceId,
+      payload: { action: 'download_evidence', evidence_id: evidenceId },
+    });
+    const url = await createEvidenceDownloadUrl(row.storage_key, row.display_name);
+    return { url, expiresIn: 300 };
+  });
 }

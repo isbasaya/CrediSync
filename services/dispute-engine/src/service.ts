@@ -17,7 +17,14 @@ import {
   notFound,
   toRecord,
 } from './shared';
-import { hasVerifiedEvidence, listEvidence, listEvidenceFor, syncDraftLetter } from './evidence';
+import {
+  eraseMarked,
+  hasVerifiedEvidence,
+  listEvidence,
+  listEvidenceFor,
+  markEvidenceDeleting,
+  syncDraftLetter,
+} from './evidence';
 
 export { DisputeError };
 
@@ -354,28 +361,35 @@ export async function escalateDispute(
  * record that the draft existed.
  */
 export async function deleteDraft(pool: Pool, userId: string, id: string): Promise<void> {
-  await withUser(pool, userId, async (client) => {
-    const deleted = await client.query<{ bureau: string }>(
-      `DELETE FROM credisync.disputes WHERE id = $1 AND status = 'draft' RETURNING bureau`,
+  const erase = await withUser(pool, userId, async (client) => {
+    // Lock first so a concurrent submit either wins (we refuse) or waits for us.
+    const locked = await client.query<{ status: string }>(
+      'SELECT status FROM credisync.disputes WHERE id = $1 FOR UPDATE',
       [id],
     );
-    if (!deleted.rows[0]) {
-      const current = await client.query('SELECT 1 FROM credisync.disputes WHERE id = $1', [id]);
-      if (!current.rowCount) throw notFound();
+    if (!locked.rows[0]) throw notFound();
+    if (locked.rows[0].status !== 'draft') {
       throw new DisputeError(
         409,
         'not_editable',
         'This dispute has already been sent and can no longer be deleted',
       );
     }
+    const marked = await markEvidenceDeleting(client, { disputeId: id });
+    const deleted = await client.query<{ bureau: string }>(
+      `DELETE FROM credisync.disputes WHERE id = $1 AND status = 'draft' RETURNING bureau`,
+      [id],
+    );
     await writeAudit(client, {
       userId,
       eventType: 'data_deletion_completed',
       resourceType: 'dispute',
       resourceId: id,
-      payload: { action: 'delete_draft_dispute', bureau: deleted.rows[0].bureau },
+      payload: { action: 'delete_draft_dispute', bureau: deleted.rows[0]!.bureau },
     });
+    return marked;
   });
+  await eraseMarked(pool, erase);
 }
 
 // ---------------------------------------------------------------------------
