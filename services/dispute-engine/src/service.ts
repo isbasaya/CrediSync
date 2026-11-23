@@ -415,6 +415,36 @@ export async function escalateDispute(
   });
 }
 
+/**
+ * Removes a draft the consumer decided not to send. Atomic on status, so a
+ * concurrent submit can never lose a sent dispute; the audit log keeps the
+ * record that the draft existed.
+ */
+export async function deleteDraft(pool: Pool, userId: string, id: string): Promise<void> {
+  await withUser(pool, userId, async (client) => {
+    const deleted = await client.query<{ bureau: string }>(
+      `DELETE FROM credisync.disputes WHERE id = $1 AND status = 'draft' RETURNING bureau`,
+      [id],
+    );
+    if (!deleted.rows[0]) {
+      const current = await client.query('SELECT 1 FROM credisync.disputes WHERE id = $1', [id]);
+      if (!current.rowCount) throw notFound();
+      throw new DisputeError(
+        409,
+        'not_editable',
+        'This dispute has already been sent and can no longer be deleted',
+      );
+    }
+    await writeAudit(client, {
+      userId,
+      eventType: 'data_deletion_completed',
+      resourceType: 'dispute',
+      resourceId: id,
+      payload: { action: 'delete_draft_dispute', bureau: deleted.rows[0].bureau },
+    });
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Operations / bureau actions (system context, always attributed)
 // ---------------------------------------------------------------------------

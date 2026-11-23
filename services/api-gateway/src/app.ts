@@ -234,6 +234,10 @@ export function createApp(pool: Pool, config: GatewayConfig = loadConfig()) {
     '/api/disputes/:id',
     asyncHandler((req, res) => forward(config.disputeEngineUrl, `/disputes/${id(req)}`, req, res)),
   );
+  app.delete(
+    '/api/disputes/:id',
+    asyncHandler((req, res) => forward(config.disputeEngineUrl, `/disputes/${id(req)}`, req, res)),
+  );
   app.get(
     '/api/disputes/:id/letter.pdf',
     asyncHandler((req, res) =>

@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AdminLayout } from '@/components/AdminLayout';
 import { RequireAuth } from '@/components/RequireAuth';
-import { Badge, Card, EmptyState, PageHeader, Pagination, Table } from '@/components/ui';
+import { Badge, Card, EmptyState, LoadError, PageHeader, Pagination, Table } from '@/components/ui';
 import { api, ApiError, API_BASE_URL } from '@/lib/api-client';
 import { GavelIcon } from '@/components/icons';
 
@@ -193,12 +193,14 @@ function DisputesPageInner() {
   const searchParams = useSearchParams();
   const [data, setData] = useState<DisputesResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [statusFilter, setStatusFilter] = useState(searchParams.get('status') ?? '');
 
   const page = Number(searchParams.get('page') ?? '1');
 
   const fetchDisputes = useCallback(async () => {
     setLoading(true);
+    setLoadFailed(false);
     const params = new URLSearchParams();
     if (statusFilter) params.set('status', statusFilter);
     params.set('page', String(page));
@@ -207,7 +209,8 @@ function DisputesPageInner() {
       const result = await api.get<DisputesResponse>(`/admin/disputes?${params.toString()}`);
       setData(result);
     } catch {
-      setData({ disputes: [], total: 0, page: 1, totalPages: 0 });
+      setData(null);
+      setLoadFailed(true);
     } finally {
       setLoading(false);
     }
@@ -249,6 +252,11 @@ function DisputesPageInner() {
 
             {loading ? (
               <Table columns={COLUMNS} rows={[]} loading />
+            ) : loadFailed ? (
+              <LoadError
+                message="Couldn’t load disputes. There may still be disputes that need attention."
+                onRetry={() => void fetchDisputes()}
+              />
             ) : data && data.disputes.length > 0 ? (
               <>
                 <Table
@@ -314,6 +322,7 @@ function DisputesPageInner() {
 
           {selected && (
             <DisputeUpdatePanel
+              key={selected.id}
               dispute={selected}
               onClose={() => setSelected(null)}
               onSaved={() => {

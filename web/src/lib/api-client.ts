@@ -45,7 +45,9 @@ const FRIENDLY: Record<string, string> = {
   link_expired: 'Your bank connection has expired. Please connect your account again.',
   link_revoked: 'This bank account was disconnected. Connect it again to continue.',
   linking_unavailable: 'Connecting a bank account isn’t available yet.',
-  dispute_already_open: 'There’s already an open dispute for this account.',
+  dispute_already_open:
+    'There’s already an open dispute for this account. You can find it under Disputes.',
+  not_editable: 'This dispute has already been sent, so it can’t be changed.',
   deadline_not_passed:
     'The bureau still has time to respond. You can escalate once the deadline passes.',
   rate_limit_exceeded: 'Too many attempts. Please wait a minute and try again.',
@@ -59,12 +61,17 @@ export function describeError(err: unknown, fallback: string): string {
   return `${fallback} Check your connection and try again.`;
 }
 
-let refreshing: Promise<boolean> | null = null;
+/** Only an explicit auth rejection ends a session; outages and rate limits don't. */
+export const isSignedOutError = (err: unknown): boolean =>
+  err instanceof ApiError && (err.status === 401 || err.status === 403);
 
-async function refreshSession(): Promise<boolean> {
+let refreshing: Promise<number> | null = null;
+
+/** Resolves to the refresh response's HTTP status, or 0 if it never reached the API. */
+async function refreshSession(): Promise<number> {
   refreshing ??= fetch(`${API_BASE_URL}/auth/refresh`, { method: 'POST', credentials: 'include' })
-    .then((r) => r.ok)
-    .catch(() => false)
+    .then((r) => r.status)
+    .catch(() => 0)
     .finally(() => {
       setTimeout(() => (refreshing = null), 0);
     });
@@ -79,7 +86,10 @@ async function request<T>(path: string, init: RequestInit = {}, retried = false)
   });
 
   if (response.status === 401 && !retried && !path.startsWith('/auth/')) {
-    if (await refreshSession()) return request<T>(path, init, true);
+    const refresh = await refreshSession();
+    if (refresh >= 200 && refresh < 300) return request<T>(path, init, true);
+    if (refresh === 429) throw new ApiError(429, 'rate_limit_exceeded', '');
+    if (refresh === 0 || refresh >= 500) throw new ApiError(503, 'upstream_unavailable', '');
   }
 
   if (!response.ok) {
@@ -153,6 +163,10 @@ export const regenerateLetter = (id: string, description: string) =>
   post<Dispute>(`/disputes/${encodeURIComponent(id)}/regenerate-letter`, { description });
 export const submitDispute = (id: string) =>
   post<Dispute>(`/disputes/${encodeURIComponent(id)}/submit`);
+export const deleteDispute = (id: string) =>
+  request<void>(`/disputes/${encodeURIComponent(id)}`, { method: 'DELETE' });
+export const escalateDispute = (id: string, caseNumber: string) =>
+  post<Dispute>(`/disputes/${encodeURIComponent(id)}/escalate`, { caseNumber });
 
 // --- Open banking -----------------------------------------------------------
 export interface BankLink {

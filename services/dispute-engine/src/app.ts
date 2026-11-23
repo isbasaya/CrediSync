@@ -213,6 +213,14 @@ export function createApp(pool: Pool) {
     }),
   );
 
+  app.delete(
+    '/disputes/:id',
+    asyncHandler(async (req, res) => {
+      await service.deleteDraft(pool, req.actingUserId!, param(req));
+      return res.status(204).end();
+    }),
+  );
+
   // --- Operations routes: admin / compliance officers only ----------------
 
   app.get(

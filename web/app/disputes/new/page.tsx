@@ -5,19 +5,24 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AppHeader } from '@/components/AppHeader';
 import { AccountStatusBadge } from '@/components/AccountStatusBadge';
+import { DraftReview } from '@/components/DraftReview';
 import { Button, Notice, PageShell } from '@/components/ui';
-import { createDispute, describeError, getBureauAccounts, submitDispute } from '@/lib/api-client';
+import { createDispute, describeError, getBureauAccounts } from '@/lib/api-client';
+import { MIN_DESCRIPTION } from '@/lib/disputes';
 import { RequireSession } from '@/lib/session';
 import {
   BUREAU_LABELS,
   DISPUTE_REASON_LABELS,
   type BureauAccountSummary,
-  type Dispute,
   type DisputeReason,
 } from '@/lib/types';
 
 const currency = new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR' });
-const MIN_DESCRIPTION = 20;
+
+function DisputeFlow() {
+  const draftId = useSearchParams().get('draft');
+  return draftId ? <DraftReview key={draftId} id={draftId} /> : <NewDispute />;
+}
 
 function NewDispute() {
   const params = useSearchParams();
@@ -29,7 +34,6 @@ function NewDispute() {
   const [recordId, setRecordId] = useState<string>('');
   const [reason, setReason] = useState<DisputeReason | ''>('');
   const [description, setDescription] = useState('');
-  const [draft, setDraft] = useState<Dispute | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,23 +59,12 @@ function NewDispute() {
     setBusy(true);
     setError(null);
     try {
-      setDraft(await createDispute({ bureauAccountId: recordId, reason, description }));
+      const draft = await createDispute({ bureauAccountId: recordId, reason, description });
+      // The draft lives in the URL so a reload returns to it.
+      router.replace(`/disputes/new?draft=${draft.id}`);
     } catch (err) {
       setError(describeError(err, 'We couldn’t prepare your dispute.'));
     } finally {
-      setBusy(false);
-    }
-  }
-
-  async function onSubmit() {
-    if (!draft) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await submitDispute(draft.id);
-      router.replace(`/disputes?sent=${draft.id}`);
-    } catch (err) {
-      setError(describeError(err, 'We couldn’t send your dispute.'));
       setBusy(false);
     }
   }
@@ -94,31 +87,6 @@ function NewDispute() {
           role="status"
           aria-label="Loading account"
         />
-      </PageShell>
-    );
-  }
-
-  if (draft) {
-    return (
-      <PageShell
-        title="Check your dispute letter"
-        intro={`This is what we’ll send to ${BUREAU_LABELS[draft.bureau]}. The bureau must respond within 20 business days of receiving it.`}
-      >
-        {error && <Notice tone="error">{error}</Notice>}
-        <pre className="max-h-[28rem] overflow-auto whitespace-pre-wrap rounded-xl border border-border-default bg-bg-surface p-4 font-sans text-sm leading-relaxed text-text-secondary">
-          {draft.letterContent}
-        </pre>
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <Button onClick={onSubmit} busy={busy}>
-            Send to {BUREAU_LABELS[draft.bureau]}
-          </Button>
-          <Link
-            href="/disputes"
-            className="inline-flex h-11 items-center justify-center rounded-lg px-4 text-sm font-semibold text-text-muted hover:text-text-primary"
-          >
-            Save as draft
-          </Link>
-        </div>
       </PageShell>
     );
   }
@@ -228,7 +196,7 @@ export default function NewDisputePage() {
       <AppHeader />
       <RequireSession>
         <Suspense>
-          <NewDispute />
+          <DisputeFlow />
         </Suspense>
       </RequireSession>
     </>

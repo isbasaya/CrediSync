@@ -178,6 +178,21 @@ export function EmptyState({ icon, message }: { icon?: ReactNode; message: strin
   );
 }
 
+export function LoadError({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div role="alert" className="flex flex-col items-center gap-3 py-12 text-center">
+      <p className="text-sm font-medium text-status-very-poor-fg">{message}</p>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="cursor-pointer rounded-lg border border-border-default bg-bg-surface px-3 py-2 text-sm font-semibold text-text-primary transition-colors duration-fast hover:border-teal-700 hover:text-teal-800"
+      >
+        Try again
+      </button>
+    </div>
+  );
+}
+
 export function Pagination({
   page,
   totalPages,

@@ -1,9 +1,13 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { ApiError, describeError, getCreditProfile } from '../api-client';
+import { ApiError, describeError, getCreditProfile, isSignedOutError } from '../api-client';
 import { DISPUTE_REASON_LABELS, DISPUTE_STATUS_LABELS } from '../types';
 import { accountStatusTokens } from '../../../../design-system/tokens';
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(async () => {
+  vi.unstubAllGlobals();
+  // The client shares an in-flight refresh until the next tick; don't leak it between tests.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+});
 
 describe('describeError', () => {
   it('turns known error codes into plain-language next steps', () => {
@@ -42,6 +46,49 @@ describe('request', () => {
       '/auth/refresh',
       '/credit-profile',
     ]);
+  });
+
+  const expiredThenRefresh = (refresh: () => Response | Promise<Response>) =>
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        url.endsWith('/auth/refresh')
+          ? refresh()
+          : new Response('{"error":"invalid_token"}', { status: 401 }),
+      ),
+    );
+
+  it('reports signed out when the refresh is rejected', async () => {
+    expiredThenRefresh(() => new Response('{}', { status: 401 }));
+    const err = await getCreditProfile().catch((e: unknown) => e);
+    expect(isSignedOutError(err)).toBe(true);
+  });
+
+  it.each([
+    ['rate limited', () => new Response('{}', { status: 429 })],
+    ['failing', () => new Response('{}', { status: 503 })],
+    ['unreachable', () => Promise.reject(new TypeError('network'))],
+  ])('does not report signed out when the refresh is %s', async (_name, refresh) => {
+    expiredThenRefresh(refresh);
+    const err = await getCreditProfile().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(isSignedOutError(err)).toBe(false);
+  });
+});
+
+describe('isSignedOutError', () => {
+  it.each([
+    [401, true],
+    [403, true],
+    [429, false],
+    [500, false],
+    [503, false],
+  ])('HTTP %i → %s', (status, expected) => {
+    expect(isSignedOutError(new ApiError(status, 'code', ''))).toBe(expected);
+  });
+
+  it('does not treat a network failure as signed out', () => {
+    expect(isSignedOutError(new TypeError('Failed to fetch'))).toBe(false);
   });
 });
 

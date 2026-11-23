@@ -84,10 +84,10 @@ export function Button({
   }[variant];
   return (
     <button
+      {...props}
       disabled={busy || props.disabled}
       aria-busy={busy || undefined}
       className={`inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold transition-colors duration-normal disabled:cursor-not-allowed disabled:opacity-50 ${styles} ${className}`}
-      {...props}
     >
       {busy && (
         <span

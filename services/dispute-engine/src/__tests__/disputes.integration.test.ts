@@ -213,4 +213,53 @@ describe.skipIf(!testDatabaseAvailable)('dispute engine (real Postgres)', () => 
     const final = await request(app).get(`/disputes/${disputeId}`).set(as(ALICE));
     expect(final.body.status).toBe('resolved_upheld');
   });
+
+  describe('deleting a draft', () => {
+    const newDraft = async () => {
+      const res = await request(app).post('/disputes').set(as(ALICE)).send({
+        bureauAccountId: accountId,
+        reason: 'incorrect_balance',
+        description: 'The balance is wrong according to my statements.',
+      });
+      expect(res.status).toBe(201);
+      return res.body.id as string;
+    };
+
+    it("will not delete someone else's draft", async () => {
+      const id = await newDraft();
+      expect((await request(app).delete(`/disputes/${id}`).set(as(MALLORY))).status).toBe(404);
+      expect((await request(app).get(`/disputes/${id}`).set(as(ALICE))).status).toBe(200);
+      expect((await request(app).delete(`/disputes/${id}`).set(as(ALICE))).status).toBe(204);
+    });
+
+    it('frees the account for a new dispute and leaves an audit record', async () => {
+      const id = await newDraft();
+      expect((await request(app).delete(`/disputes/${id}`).set(as(ALICE))).status).toBe(204);
+      expect((await request(app).get(`/disputes/${id}`).set(as(ALICE))).status).toBe(404);
+
+      const audit = await db.adminPool.query(
+        "SELECT user_id, payload FROM credisync.regulatory_audit_logs WHERE resource_id = $1 AND payload->>'action' = 'delete_draft_dispute'",
+        [id],
+      );
+      expect(audit.rows).toHaveLength(1);
+      expect(audit.rows[0].user_id).toBe(ALICE);
+
+      const replacement = await newDraft();
+      expect((await request(app).delete(`/disputes/${replacement}`).set(as(ALICE))).status).toBe(
+        204,
+      );
+    });
+
+    it('never deletes a dispute that has been sent', async () => {
+      const id = await newDraft();
+      await request(app).post(`/disputes/${id}/submit`).set(as(ALICE));
+
+      const res = await request(app).delete(`/disputes/${id}`).set(as(ALICE));
+      expect(res.status).toBe(409);
+      expect(res.body.error).toBe('not_editable');
+      expect((await request(app).get(`/disputes/${id}`).set(as(ALICE))).body.status).toBe(
+        'submitted',
+      );
+    });
+  });
 });

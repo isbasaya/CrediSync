@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AdminLayout } from '@/components/AdminLayout';
 import { RequireAuth } from '@/components/RequireAuth';
-import { Badge, Card, EmptyState, PageHeader, Pagination, Table } from '@/components/ui';
+import { Badge, Card, EmptyState, LoadError, PageHeader, Pagination, Table } from '@/components/ui';
 import { api } from '@/lib/api-client';
 import { InboxIcon } from '@/components/icons';
 
@@ -38,12 +38,14 @@ function AuditLogsPageInner() {
   const searchParams = useSearchParams();
   const [data, setData] = useState<AuditLogsResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [eventFilter, setEventFilter] = useState(searchParams.get('event') ?? '');
 
   const page = Number(searchParams.get('page') ?? '1');
 
   const fetchLogs = useCallback(async () => {
     setLoading(true);
+    setLoadFailed(false);
     const params = new URLSearchParams();
     if (eventFilter) params.set('event', eventFilter);
     params.set('page', String(page));
@@ -52,7 +54,8 @@ function AuditLogsPageInner() {
       const result = await api.get<AuditLogsResponse>(`/admin/audit-logs?${params.toString()}`);
       setData(result);
     } catch {
-      setData({ logs: [], total: 0, page: 1, totalPages: 0 });
+      setData(null);
+      setLoadFailed(true);
     } finally {
       setLoading(false);
     }
@@ -97,6 +100,11 @@ function AuditLogsPageInner() {
                 columns={['Event', 'Resource', 'User', 'Success', 'Timestamp']}
                 rows={[]}
                 loading
+              />
+            ) : loadFailed ? (
+              <LoadError
+                message="Couldn’t load the audit log. This doesn’t mean there are no entries."
+                onRetry={() => void fetchLogs()}
               />
             ) : data && data.logs.length > 0 ? (
               <>

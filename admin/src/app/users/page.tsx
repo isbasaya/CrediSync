@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { AdminLayout } from '@/components/AdminLayout';
 import { RequireAuth } from '@/components/RequireAuth';
-import { Badge, Card, EmptyState, PageHeader, Pagination, Table } from '@/components/ui';
+import { Badge, Card, EmptyState, LoadError, PageHeader, Pagination, Table } from '@/components/ui';
 import { api } from '@/lib/api-client';
 import { SearchIcon, UsersIcon } from '@/components/icons';
 
@@ -39,12 +39,14 @@ function UsersPageInner() {
   const searchParams = useSearchParams();
   const [data, setData] = useState<UsersResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [search, setSearch] = useState(searchParams.get('q') ?? '');
 
   const page = Number(searchParams.get('page') ?? '1');
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
+    setLoadFailed(false);
     const params = new URLSearchParams();
     if (search) params.set('q', search);
     params.set('page', String(page));
@@ -53,7 +55,8 @@ function UsersPageInner() {
       const result = await api.get<UsersResponse>(`/admin/users?${params.toString()}`);
       setData(result);
     } catch {
-      setData({ users: [], total: 0, page: 1, totalPages: 0 });
+      setData(null);
+      setLoadFailed(true);
     } finally {
       setLoading(false);
     }
@@ -101,6 +104,11 @@ function UsersPageInner() {
                 columns={['Name', 'Email', 'Status', 'Verified', 'Joined']}
                 rows={[]}
                 loading
+              />
+            ) : loadFailed ? (
+              <LoadError
+                message="Couldn’t load users. This doesn’t mean there are none."
+                onRetry={() => void fetchUsers()}
               />
             ) : data && data.users.length > 0 ? (
               <>
