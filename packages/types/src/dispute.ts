@@ -46,3 +46,11 @@ export interface ConsumerContext {
 export type DisputeTransition = {
   [K in DisputeStatus]: DisputeStatus[];
 };
+
+export interface DisputeEvidence {
+  id: string;
+  displayName: string;
+  contentType: string;
+  sizeBytes: number;
+  status: 'pending' | 'verified';
+}

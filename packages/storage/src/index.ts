@@ -18,7 +18,6 @@ export const ALLOWED_EVIDENCE_TYPES: Record<string, string> = {
 };
 export const MAX_EVIDENCE_BYTES = 10 * 1024 * 1024;
 const UPLOAD_URL_TTL_SECONDS = 15 * 60;
-const DOWNLOAD_URL_TTL_SECONDS = 5 * 60;
 
 export interface PresignedUpload {
   uploadUrl: string;
@@ -35,7 +34,11 @@ export interface StorageProvider {
     contentLength: number,
     expiresIn: number,
   ): Promise<PresignedUpload>;
-  presignDownload(key: string, expiresIn: number): Promise<string>;
+  presignDownload(key: string, expiresIn: number, fileName?: string): Promise<string>;
+  /** Size of the stored object, or null when it does not exist. */
+  headObject(key: string): Promise<{ size: number } | null>;
+  /** The first `bytes` bytes of the object, for content-signature checks. */
+  readObjectStart(key: string, bytes: number): Promise<Buffer>;
   deleteObject(key: string): Promise<void>;
   deletePrefix(prefix: string): Promise<number>;
 }
@@ -62,8 +65,18 @@ export class LocalStorageProvider implements StorageProvider {
     };
   }
 
-  async presignDownload(key: string, expiresIn: number): Promise<string> {
-    return `${this.baseUrl}/download/${key}?expires=${expiresIn}`;
+  async presignDownload(key: string, expiresIn: number, fileName?: string): Promise<string> {
+    const name = fileName ? `&name=${encodeURIComponent(fileName)}` : '';
+    return `${this.baseUrl}/download/${key}?expires=${expiresIn}${name}`;
+  }
+
+  /** No bucket is configured locally, so no object can ever be found. */
+  async headObject(_key: string): Promise<{ size: number } | null> {
+    return null;
+  }
+
+  async readObjectStart(_key: string, _bytes: number): Promise<Buffer> {
+    return Buffer.alloc(0);
   }
 
   async deleteObject(key: string): Promise<void> {
@@ -76,15 +89,37 @@ export class LocalStorageProvider implements StorageProvider {
   }
 }
 
+export interface S3ProviderOptions {
+  /** Service endpoint override (MinIO). Local and test environments only. */
+  endpoint?: string;
+  /** Endpoint browsers use when it differs from the service one (localhost vs docker host). */
+  publicEndpoint?: string;
+}
+
+const SSE_HEADERS = ['x-amz-server-side-encryption', 'x-amz-server-side-encryption-aws-kms-key-id'];
+
+/** RFC 6266 Content-Disposition with an ASCII fallback and an RFC 5987 `filename*`. */
+export function contentDisposition(fileName: string): string {
+  const fallback = fileName.replace(/[^\x20-\x7e]|["\\%]/g, '_');
+  const encoded = encodeURIComponent(fileName).replace(
+    /['()*]/g,
+    (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+  return `attachment; filename="${fallback}"; filename*=UTF-8''${encoded}`;
+}
+
 /** S3 provider; the AWS SDK is loaded lazily so local development needs no AWS credentials. */
 export class S3StorageProvider implements StorageProvider {
   constructor(
     private readonly bucket: string,
     private readonly kmsKeyId: string,
     private readonly region: string = process.env.AWS_REGION ?? 'af-south-1',
+    private readonly options: S3ProviderOptions = {},
   ) {
     if (region !== 'af-south-1')
       throw new Error(`S3 region must be af-south-1 (data residency); got ${region}`);
+    if ((options.endpoint || options.publicEndpoint) && !isLocalEnv())
+      throw new Error('S3 endpoint overrides are only available in development and test');
   }
 
   private async sdk() {
@@ -92,7 +127,16 @@ export class S3StorageProvider implements StorageProvider {
       import('@aws-sdk/client-s3'),
       import('@aws-sdk/s3-request-presigner'),
     ]);
-    return { s3, presigner, client: new s3.S3Client({ region: this.region }) };
+    const { endpoint, publicEndpoint } = this.options;
+    const make = (ep?: string) =>
+      new s3.S3Client({
+        region: this.region,
+        ...(ep ? { endpoint: ep, forcePathStyle: true } : {}),
+      });
+    const client = make(endpoint);
+    // Presigned URLs are opened by browsers, which may reach the store on another host name.
+    const signer = publicEndpoint ? make(publicEndpoint) : client;
+    return { s3, presigner, client, signer };
   }
 
   async presignUpload(
@@ -101,35 +145,71 @@ export class S3StorageProvider implements StorageProvider {
     contentLength: number,
     expiresIn: number,
   ): Promise<PresignedUpload> {
-    const { s3, presigner, client } = await this.sdk();
+    const { s3, presigner, signer } = await this.sdk();
+    // MinIO has no KMS, so SSE is only requested against real S3.
+    const sse = !this.options.endpoint;
     const command = new s3.PutObjectCommand({
       Bucket: this.bucket,
       Key: key,
       ContentType: contentType,
       ContentLength: contentLength,
-      ServerSideEncryption: 'aws:kms',
-      SSEKMSKeyId: this.kmsKeyId,
+      ...(sse ? { ServerSideEncryption: 'aws:kms' as const, SSEKMSKeyId: this.kmsKeyId } : {}),
     });
-    const uploadUrl = await presigner.getSignedUrl(client, command, { expiresIn });
+    const uploadUrl = await presigner.getSignedUrl(signer, command, {
+      expiresIn,
+      // Sign the SSE headers so the ones in requiredHeaders are the ones enforced.
+      ...(sse ? { unhoistableHeaders: new Set(SSE_HEADERS) } : {}),
+    });
     return {
       uploadUrl,
       key,
       expiresIn,
       requiredHeaders: {
         'Content-Type': contentType,
-        'x-amz-server-side-encryption': 'aws:kms',
-        'x-amz-server-side-encryption-aws-kms-key-id': this.kmsKeyId,
+        ...(sse
+          ? {
+              'x-amz-server-side-encryption': 'aws:kms',
+              'x-amz-server-side-encryption-aws-kms-key-id': this.kmsKeyId,
+            }
+          : {}),
       },
     };
   }
 
-  async presignDownload(key: string, expiresIn: number): Promise<string> {
-    const { s3, presigner, client } = await this.sdk();
+  async presignDownload(key: string, expiresIn: number, fileName?: string): Promise<string> {
+    const { s3, presigner, signer } = await this.sdk();
     return presigner.getSignedUrl(
-      client,
-      new s3.GetObjectCommand({ Bucket: this.bucket, Key: key }),
+      signer,
+      new s3.GetObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        ResponseCacheControl: 'no-store',
+        ...(fileName ? { ResponseContentDisposition: contentDisposition(fileName) } : {}),
+      }),
       { expiresIn },
     );
+  }
+
+  async headObject(key: string): Promise<{ size: number } | null> {
+    const { s3, client } = await this.sdk();
+    try {
+      const head = await client.send(new s3.HeadObjectCommand({ Bucket: this.bucket, Key: key }));
+      return { size: head.ContentLength ?? 0 };
+    } catch (err) {
+      const e = err as { name?: string; $metadata?: { httpStatusCode?: number } };
+      if (e.name === 'NotFound' || e.name === 'NoSuchKey' || e.$metadata?.httpStatusCode === 404)
+        return null;
+      throw err;
+    }
+  }
+
+  async readObjectStart(key: string, bytes: number): Promise<Buffer> {
+    const { s3, client } = await this.sdk();
+    const res = await client.send(
+      new s3.GetObjectCommand({ Bucket: this.bucket, Key: key, Range: `bytes=0-${bytes - 1}` }),
+    );
+    if (!res.Body) return Buffer.alloc(0);
+    return Buffer.from(await res.Body.transformToByteArray());
   }
 
   async deleteObject(key: string): Promise<void> {
@@ -164,12 +244,22 @@ export class S3StorageProvider implements StorageProvider {
 
 let provider: StorageProvider | null = null;
 
-function current(): StorageProvider {
+export function current(): StorageProvider {
   if (!provider) {
     const bucket = process.env.EVIDENCE_BUCKET;
     const kmsKeyId = process.env.KMS_KEY_ID;
-    provider =
-      bucket && kmsKeyId ? new S3StorageProvider(bucket, kmsKeyId) : new LocalStorageProvider();
+    if (bucket && kmsKeyId) {
+      // Endpoint overrides (MinIO) are never honoured outside local and test environments.
+      const options: S3ProviderOptions = isLocalEnv()
+        ? {
+            endpoint: process.env.S3_ENDPOINT || undefined,
+            publicEndpoint: process.env.S3_PUBLIC_ENDPOINT || undefined,
+          }
+        : {};
+      provider = new S3StorageProvider(bucket, kmsKeyId, undefined, options);
+    } else {
+      provider = new LocalStorageProvider();
+    }
   }
   return provider;
 }
@@ -208,11 +298,10 @@ export async function createEvidenceUpload(
   return current().presignUpload(key, contentType, contentLength, UPLOAD_URL_TTL_SECONDS);
 }
 
-export async function createEvidenceDownloadUrl(key: string): Promise<string> {
-  return current().presignDownload(key, DOWNLOAD_URL_TTL_SECONDS);
-}
-
 /** POPIA erasure: removes every object the user uploaded. */
 export async function deleteUserFiles(userId: string): Promise<number> {
   return current().deletePrefix(userPrefix(userId));
 }
+
+export * from './evidence-file';
+export { InMemoryStorageProvider } from './memory-provider';
