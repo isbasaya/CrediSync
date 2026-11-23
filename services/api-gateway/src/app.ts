@@ -225,9 +225,20 @@ export function createApp(pool: Pool, config: GatewayConfig = loadConfig()) {
     asyncHandler((req, res) => forward(config.disputeEngineUrl, '/disputes', req, res)),
   );
   app.post(
-    '/api/disputes/evidence-uploads',
+    '/api/disputes/:id/evidence',
     asyncHandler((req, res) =>
-      forward(config.disputeEngineUrl, '/disputes/evidence-uploads', req, res),
+      forward(config.disputeEngineUrl, `/disputes/${id(req)}/evidence`, req, res),
+    ),
+  );
+  app.post(
+    '/api/disputes/:id/evidence/:evidenceId/complete',
+    asyncHandler((req, res) =>
+      forward(
+        config.disputeEngineUrl,
+        `/disputes/${id(req)}/evidence/${encodeURIComponent(String(req.params.evidenceId))}/complete`,
+        req,
+        res,
+      ),
     ),
   );
   app.get(

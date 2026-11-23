@@ -11,10 +11,11 @@ import {
   standardRateLimiter,
   traceIdMiddleware,
 } from '@credisync/middleware';
-import { createEvidenceUpload, EvidenceValidationError } from '@credisync/storage';
+import { EvidenceValidationError } from '@credisync/storage';
 import { BUREAU_SOURCES, DISPUTE_REASONS } from './types';
 import { InvalidTransitionError } from './state-machine';
 import * as service from './service';
+import * as evidence from './evidence';
 import { SIGNATURE_HEADER, verifyWebhookSignature, webhookSecret } from './webhook-signature';
 
 const logger = pino({ name: 'dispute-engine' });
@@ -28,13 +29,13 @@ const createSchema = z.object({
     .trim()
     .min(20, 'Give the bureau enough detail to investigate (at least 20 characters)')
     .max(4000),
-  evidenceKeys: z.array(z.string().max(200)).max(10).default([]),
 });
 const regenerateSchema = z.object({ description: z.string().trim().min(20).max(4000) });
 const escalateSchema = z.object({ caseNumber: z.string().trim().min(1).max(64) });
 const uploadSchema = z.object({
   contentType: z.string(),
   contentLength: z.number().int().positive(),
+  fileName: z.string().min(1).max(255),
 });
 const adminResponseSchema = z.object({
   response: z.string().trim().min(1).max(8000),
@@ -130,23 +131,6 @@ export function createApp(pool: Pool) {
     ),
   );
 
-  app.post(
-    '/disputes/evidence-uploads',
-    asyncHandler(async (req, res) => {
-      const parsed = uploadSchema.safeParse(req.body);
-      if (!parsed.success) return invalid(res, parsed.error);
-      return res
-        .status(201)
-        .json(
-          await createEvidenceUpload(
-            req.actingUserId!,
-            parsed.data.contentType,
-            parsed.data.contentLength,
-          ),
-        );
-    }),
-  );
-
   app.get(
     '/disputes/:id',
     asyncHandler(async (req, res) =>
@@ -176,6 +160,31 @@ export function createApp(pool: Pool) {
       return res
         .status(201)
         .json(await service.createDispute(pool, req.actingUserId!, parsed.data));
+    }),
+  );
+
+  app.post(
+    '/disputes/:id/evidence',
+    asyncHandler(async (req, res) => {
+      const parsed = uploadSchema.safeParse(req.body);
+      if (!parsed.success) return invalid(res, parsed.error);
+      return res
+        .status(201)
+        .json(
+          await evidence.requestEvidenceUpload(pool, req.actingUserId!, param(req), parsed.data),
+        );
+    }),
+  );
+
+  app.post(
+    '/disputes/:id/evidence/:evidenceId/complete',
+    asyncHandler(async (req, res) => {
+      const evidenceId = uuid.safeParse(req.params.evidenceId);
+      if (!evidenceId.success)
+        throw new service.DisputeError(404, 'not_found', 'Evidence not found');
+      return res.json(
+        await evidence.completeEvidenceUpload(pool, req.actingUserId!, param(req), evidenceId.data),
+      );
     }),
   );
 

@@ -7,7 +7,7 @@ export interface DisputeRecord {
   bureau: BureauSource;
   disputeReason: DisputeReason;
   disputeDescription: string;
-  supportingEvidence: string[];
+  evidence: DisputeEvidence[];
   status: DisputeStatus;
 
   letterContent: string | null;

@@ -87,19 +87,6 @@ describe.skipIf(!testDatabaseAvailable)('dispute engine (real Postgres)', () => 
     disputeId = res.body.id;
   });
 
-  it('rejects evidence keys outside the user prefix', async () => {
-    const res = await request(app)
-      .post('/disputes')
-      .set(as(ALICE))
-      .send({
-        bureauAccountId: accountId,
-        reason: 'incorrect_balance',
-        description: 'Balance is wrong according to my statements.',
-        evidenceKeys: [`uploads/${MALLORY}/x.pdf`],
-      });
-    expect(res.status).toBe(400);
-  });
-
   it("hides one user's disputes from another", async () => {
     expect((await request(app).get(`/disputes/${disputeId}`).set(as(MALLORY))).status).toBe(404);
     expect((await request(app).post(`/disputes/${disputeId}/submit`).set(as(MALLORY))).status).toBe(

@@ -4,7 +4,7 @@
  */
 export type { BureauSource, DisputeReason, DisputeStatus } from '@credisync/types';
 export { DISPUTE_REASONS, BUREAU_SOURCES } from '@credisync/types';
-import type { BureauSource, DisputeReason, DisputeStatus } from '@credisync/types';
+import type { BureauSource, DisputeEvidence, DisputeReason, DisputeStatus } from '@credisync/types';
 
 export interface DisputeRecord {
   id: string;
@@ -13,7 +13,7 @@ export interface DisputeRecord {
   bureau: BureauSource;
   disputeReason: DisputeReason;
   disputeDescription: string;
-  supportingEvidence: string[]; // storage object keys
+  evidence: DisputeEvidence[]; // never includes storage keys
   status: DisputeStatus;
 
   letterContent: string | null;

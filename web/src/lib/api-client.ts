@@ -157,7 +157,6 @@ export const createDispute = (input: {
   bureauAccountId: string;
   reason: DisputeReason;
   description: string;
-  evidenceKeys?: string[];
 }) => post<Dispute>('/disputes', input);
 export const regenerateLetter = (id: string, description: string) =>
   post<Dispute>(`/disputes/${encodeURIComponent(id)}/regenerate-letter`, { description });

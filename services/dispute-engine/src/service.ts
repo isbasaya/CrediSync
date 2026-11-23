@@ -1,68 +1,27 @@
 import type { Pool, PoolClient } from 'pg';
 import pino from 'pino';
 import { withSystem, withUser, writeAudit, enqueueEvent } from '@credisync/db';
-import { decryptFromBytes } from '@credisync/crypto';
-import { maskSaIdNumber, type DisputeReason, type DisputeStatus } from '@credisync/types';
+import type { DisputeReason, DisputeStatus } from '@credisync/types';
 import { sendEmail } from '@credisync/notifications';
 import { generateDisputeLetter } from './templates/dispute-letter.template';
 import { renderLetterPdf } from './templates/letter-pdf';
 import { assertLegalReviewComplete } from './templates/legal-references';
 import { computeResolutionDeadline, southAfricanDate } from './deadlines';
 import { InvalidTransitionError, isEditable, statusesLeadingTo } from './state-machine';
-import type { AccountContext, DisputeRecord } from './types';
+import type { DisputeRecord } from './types';
+import {
+  DisputeError,
+  SELECT_DISPUTE,
+  accountContext,
+  consumerContext,
+  notFound,
+  toRecord,
+} from './shared';
+import { hasVerifiedEvidence, listEvidence, listEvidenceFor, syncDraftLetter } from './evidence';
+
+export { DisputeError };
 
 const logger = pino({ name: 'dispute-engine' });
-
-export class DisputeError extends Error {
-  constructor(
-    public readonly status: number,
-    public readonly code: string,
-    message: string,
-  ) {
-    super(message);
-    this.name = 'DisputeError';
-  }
-}
-
-const notFound = () => new DisputeError(404, 'not_found', 'Dispute not found');
-
-function toRecord(r: Record<string, unknown>): DisputeRecord {
-  const iso = (v: unknown) => (v ? new Date(v as string).toISOString() : null);
-  const date = (v: unknown) =>
-    v ? (v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10)) : null;
-  return {
-    id: r.id as string,
-    userId: r.user_id as string,
-    bureauAccountId: r.bureau_account_id as string,
-    bureau: r.bureau as DisputeRecord['bureau'],
-    disputeReason: r.dispute_reason as DisputeReason,
-    disputeDescription: r.dispute_description as string,
-    supportingEvidence: (r.supporting_evidence as string[]) ?? [],
-    status: r.status as DisputeStatus,
-    letterContent: (r.letter_content as string | null) ?? null,
-    letterGeneratedAt: iso(r.letter_generated_at),
-    letterVersion: Number(r.letter_version ?? 0),
-    submittedAt: iso(r.submitted_at),
-    submissionChannel: (r.submission_channel as string | null) ?? null,
-    bureauReference: (r.bureau_reference as string | null) ?? null,
-    bureauResponse: (r.bureau_response as string | null) ?? null,
-    bureauRespondedAt: iso(r.bureau_responded_at),
-    resolvedAt: iso(r.resolved_at),
-    ncrCaseNumber: (r.ncr_case_number as string | null) ?? null,
-    ncrEscalatedAt: iso(r.ncr_escalated_at),
-    resolutionDeadline: date(r.resolution_deadline),
-    deadlineBreachedAt: iso(r.deadline_breached_at),
-    createdAt: iso(r.created_at)!,
-    updatedAt: iso(r.updated_at)!,
-    creditorName: (r.creditor_name as string | undefined) ?? undefined,
-    accountType: (r.account_type as string | undefined) ?? undefined,
-  };
-}
-
-const SELECT_DISPUTE = `
-  SELECT d.*, ba.creditor_name, ba.account_type
-  FROM credisync.disputes d
-  JOIN credisync.bureau_accounts ba ON ba.id = d.bureau_account_id`;
 
 /**
  * Atomic compare-and-set status change: the UPDATE only applies if the
@@ -83,7 +42,7 @@ async function transition(
      RETURNING *`,
     [id, to, allowedFrom, ...extraParams],
   );
-  if (result.rows[0]) return toRecord(result.rows[0]);
+  if (result.rows[0]) return toRecord(result.rows[0], await listEvidence(client, id));
 
   const current = await client.query<{ status: DisputeStatus }>(
     'SELECT status FROM credisync.disputes WHERE id = $1',
@@ -100,58 +59,6 @@ async function loadHolidayOverrides(client: PoolClient): Promise<Set<string>> {
   return new Set(r.rows.map((row) => row.d));
 }
 
-/** `revealFullId` is only for the audited operations lodging copy. */
-async function consumerContext(client: PoolClient, userId: string, revealFullId = false) {
-  const r = await client.query(
-    'SELECT first_name, last_name, mobile_number, email, sa_id_encrypted FROM credisync.users WHERE id = $1',
-    [userId],
-  );
-  const u = r.rows[0];
-  if (!u) throw new DisputeError(404, 'not_found', 'User not found');
-  const saId = await decryptFromBytes(u.sa_id_encrypted);
-  return {
-    fullName: `${u.first_name} ${u.last_name}`,
-    saIdMasked: revealFullId ? saId : maskSaIdNumber(saId),
-    mobileNumber: u.mobile_number as string,
-    email: u.email as string,
-  };
-}
-
-async function accountContext(
-  client: PoolClient,
-  bureauAccountId: string,
-): Promise<(AccountContext & { bureau: DisputeRecord['bureau'] }) | null> {
-  const r = await client.query(
-    `SELECT bureau, creditor_name, account_type, account_reference, current_balance, overdue_amount, status
-     FROM credisync.bureau_accounts WHERE id = $1`,
-    [bureauAccountId],
-  );
-  const row = r.rows[0];
-  if (!row) return null;
-  return {
-    bureau: row.bureau,
-    creditorName: row.creditor_name,
-    accountType: row.account_type,
-    accountReference: row.account_reference,
-    currentBalance: Number(row.current_balance),
-    overdueAmount: Number(row.overdue_amount),
-    status: row.status,
-  };
-}
-
-function assertEvidenceKeysBelongTo(userId: string, keys: string[]): void {
-  const prefix = `uploads/${userId}/`;
-  for (const key of keys) {
-    if (!key.startsWith(prefix) || key.includes('..')) {
-      throw new DisputeError(
-        400,
-        'invalid_evidence',
-        'Evidence must be uploaded through CrediSync',
-      );
-    }
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Consumer actions (row-level security limits every query to the caller)
 // ---------------------------------------------------------------------------
@@ -162,15 +69,26 @@ export async function listDisputes(pool: Pool, userId: string): Promise<DisputeR
       `${SELECT_DISPUTE} WHERE d.user_id = $1 ORDER BY d.created_at DESC`,
       [userId],
     );
-    return r.rows.map(toRecord);
+    const evidence = await listEvidenceFor(
+      client,
+      r.rows.map((row) => row.id as string),
+    );
+    return r.rows.map((row) => toRecord(row, evidence.get(row.id as string) ?? []));
   });
 }
 
 export async function getDispute(pool: Pool, userId: string, id: string): Promise<DisputeRecord> {
   return withUser(pool, userId, async (client) => {
     const r = await client.query(`${SELECT_DISPUTE} WHERE d.id = $1`, [id]);
-    if (!r.rows[0]) throw notFound();
-    return toRecord(r.rows[0]);
+    let row = r.rows[0];
+    if (!row) throw notFound();
+    if (row.status === 'draft') {
+      // Reconcile the letter with the verified files (the job may have removed some).
+      const locked = await client.query(`${SELECT_DISPUTE} WHERE d.id = $1 FOR UPDATE OF d`, [id]);
+      if (!locked.rows[0]) throw notFound();
+      row = await syncDraftLetter(client, locked.rows[0]);
+    }
+    return toRecord(row, await listEvidence(client, id));
   });
 }
 
@@ -178,7 +96,6 @@ export interface CreateDisputeInput {
   bureauAccountId: string;
   reason: DisputeReason;
   description: string;
-  evidenceKeys: string[];
 }
 
 /** Creates a draft dispute and generates the letter for the consumer to review. */
@@ -188,7 +105,6 @@ export async function createDispute(
   input: CreateDisputeInput,
 ): Promise<DisputeRecord> {
   assertLegalReviewComplete();
-  assertEvidenceKeysBelongTo(userId, input.evidenceKeys);
 
   return withUser(pool, userId, async (client) => {
     // RLS: returns nothing for another user's account.
@@ -219,24 +135,16 @@ export async function createDispute(
       bureau: account.bureau,
       reason: input.reason,
       description: input.description,
-      hasEvidence: input.evidenceKeys.length > 0,
+      hasEvidence: false,
     });
 
     const inserted = await client.query<{ id: string }>(
       `INSERT INTO credisync.disputes (
          user_id, bureau_account_id, bureau, dispute_reason, dispute_description,
-         supporting_evidence, status, letter_content, letter_generated_at, letter_version
-       ) VALUES ($1, $2, $3, $4, $5, $6::jsonb, 'draft', $7, NOW(), 1)
+         status, letter_content, letter_generated_at, letter_version
+       ) VALUES ($1, $2, $3, $4, $5, 'draft', $6, NOW(), 1)
        RETURNING id`,
-      [
-        userId,
-        input.bureauAccountId,
-        account.bureau,
-        input.reason,
-        input.description,
-        JSON.stringify(input.evidenceKeys),
-        letter,
-      ],
+      [userId, input.bureauAccountId, account.bureau, input.reason, input.description, letter],
     );
     const id = inserted.rows[0]!.id;
     await writeAudit(client, {
@@ -255,7 +163,7 @@ export async function createDispute(
     });
 
     const r = await client.query(`${SELECT_DISPUTE} WHERE d.id = $1`, [id]);
-    return toRecord(r.rows[0]!);
+    return toRecord(r.rows[0]!, []);
   });
 }
 
@@ -279,25 +187,30 @@ export async function regenerateLetter(
     }
     const account = await accountContext(client, existing.bureau_account_id);
     const consumer = await consumerContext(client, userId);
+    const hasEvidence = await hasVerifiedEvidence(client, id);
     const letter = generateDisputeLetter({
       consumer,
       account: account!,
       bureau: existing.bureau,
       reason: existing.dispute_reason,
       description,
-      hasEvidence: (existing.supporting_evidence as string[]).length > 0,
+      hasEvidence,
     });
     const updated = await client.query(
       `UPDATE credisync.disputes
-       SET dispute_description = $2, letter_content = $3, letter_generated_at = NOW(), letter_version = letter_version + 1
+       SET dispute_description = $2, letter_content = $3, letter_generated_at = NOW(), letter_version = letter_version + 1,
+           letter_has_evidence = $4
        WHERE id = $1 RETURNING *`,
-      [id, description, letter],
+      [id, description, letter, hasEvidence],
     );
-    return toRecord({
-      ...updated.rows[0],
-      creditor_name: existing.creditor_name,
-      account_type: existing.account_type,
-    });
+    return toRecord(
+      {
+        ...updated.rows[0],
+        creditor_name: existing.creditor_name,
+        account_type: existing.account_type,
+      },
+      await listEvidence(client, id),
+    );
   });
 }
 
@@ -318,6 +231,23 @@ export async function submitDispute(
 ): Promise<DisputeRecord> {
   const channel = submissionChannel();
   const record = await withUser(pool, userId, async (client) => {
+    // Lock first, so an upload cannot be completed between the check and the transition.
+    const locked = await client.query(`${SELECT_DISPUTE} WHERE d.id = $1 FOR UPDATE OF d`, [id]);
+    if (!locked.rows[0]) throw notFound();
+    if (locked.rows[0].status === 'draft') {
+      const pending = await client.query(
+        "SELECT 1 FROM credisync.dispute_evidence WHERE dispute_id = $1 AND status = 'pending' LIMIT 1",
+        [id],
+      );
+      if (pending.rowCount) {
+        throw new DisputeError(
+          409,
+          'evidence_pending',
+          'A file is still being uploaded. Finish or remove it before sending.',
+        );
+      }
+      await syncDraftLetter(client, locked.rows[0]);
+    }
     const holidays = await loadHolidayOverrides(client);
     const submittedAt = new Date();
     const deadline = computeResolutionDeadline(submittedAt, holidays);
@@ -474,7 +404,7 @@ export async function recordBureauReference(
       resourceId: id,
       payload: { action: 'record_bureau_reference' },
     });
-    return toRecord(r.rows[0]);
+    return toRecord(r.rows[0], await listEvidence(client, id));
   });
 }
 
@@ -502,6 +432,7 @@ export async function recordBureauResponse(
               [id, response, reference],
             )
           ).rows[0]!,
+          await listEvidence(client, id),
         )
       : await transition(
           client,
@@ -686,6 +617,7 @@ export async function lodgingLetterPdf(pool: Pool, actorId: string, id: string):
     }
     const account = await accountContext(client, d.bureau_account_id);
     const consumer = await consumerContext(client, d.user_id, true);
+    const hasEvidence = await hasVerifiedEvidence(client, id);
     await writeAudit(client, {
       userId: d.user_id,
       performedBy: actorId,
@@ -700,7 +632,7 @@ export async function lodgingLetterPdf(pool: Pool, actorId: string, id: string):
       bureau: d.bureau,
       reason: d.dispute_reason,
       description: d.dispute_description,
-      hasEvidence: (d.supporting_evidence as string[]).length > 0,
+      hasEvidence,
     });
   });
   return renderLetterPdf(letter, { disputeId: id, confidential: true });

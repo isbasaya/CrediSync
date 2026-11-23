@@ -6,8 +6,8 @@
 -- only metadata. Rows start 'pending' when an upload is issued, become
 -- 'verified' once the object is confirmed, and 'deleting' while the object
 -- is being removed. dispute_id is SET NULL on dispute deletion so the
--- object can still be found and purged. disputes.supporting_evidence stays
--- until the dispute engine stops using it.
+-- object can still be found and purged. disputes.supporting_evidence is
+-- dropped: the product is pre-launch, so there is nothing to migrate.
 SET search_path TO credisync, public;
 
 CREATE TYPE evidence_status AS ENUM ('pending', 'verified', 'deleting');
@@ -34,6 +34,8 @@ CREATE INDEX idx_dispute_evidence_unsettled ON dispute_evidence (status, created
 ALTER TABLE disputes
     ADD COLUMN letter_has_evidence BOOLEAN NOT NULL DEFAULT FALSE;
 
+ALTER TABLE disputes DROP COLUMN supporting_evidence;
+
 -- Row-level security
 ALTER TABLE dispute_evidence ENABLE ROW LEVEL SECURITY;
 ALTER TABLE dispute_evidence FORCE  ROW LEVEL SECURITY;
@@ -45,6 +47,7 @@ CREATE POLICY de_access ON dispute_evidence
 GRANT SELECT, INSERT, UPDATE, DELETE ON dispute_evidence TO credisync_app;
 
 -- @rollback
+ALTER TABLE credisync.disputes ADD COLUMN IF NOT EXISTS supporting_evidence JSONB NOT NULL DEFAULT '[]';
 ALTER TABLE credisync.disputes DROP COLUMN IF EXISTS letter_has_evidence;
 DROP TABLE IF EXISTS credisync.dispute_evidence;
 DROP TYPE IF EXISTS credisync.evidence_status;
