@@ -12,6 +12,7 @@ import {
   runDeletionRequests,
   runDisputeDeadlineMonitor,
   runEvidenceMaintenance,
+  parseEvidenceRetentionMonths,
   runPartitionMaintenance,
   runRetention,
 } from '../jobs';
@@ -366,6 +367,61 @@ describe.skipIf(!testDatabaseAvailable)('evidence maintenance (real Postgres)', 
     expect(await exists(e.id)).toBe(false);
   });
 
+  it('skips a dispute locked by a live transition, then queues it next run', async () => {
+    const d = await dispute('draft', { updated: await ago('91 days') });
+    const e = await evidence(d, 'verified', await ago('91 days'));
+    const other = await db.adminPool.connect();
+    try {
+      await other.query('BEGIN');
+      await other.query('SELECT 1 FROM credisync.disputes WHERE id = $1 FOR UPDATE', [d]);
+      const res = await runEvidenceMaintenance(db.pool);
+      expect(res.staleDrafts).toBe(0);
+      expect(await exists(e.id)).toBe(true);
+      await other.query('COMMIT');
+    } finally {
+      other.release();
+    }
+    const next = await runEvidenceMaintenance(db.pool);
+    expect(next.staleDrafts).toBe(1);
+    expect(await exists(e.id)).toBe(false);
+  });
+
+  it('does not erase evidence of a dispute submitted while locked', async () => {
+    const d = await dispute('draft', { updated: await ago('91 days') });
+    const e = await evidence(d, 'verified', await ago('91 days'));
+    const other = await db.adminPool.connect();
+    try {
+      await other.query('BEGIN');
+      await other.query(
+        "UPDATE credisync.disputes SET status = 'submitted', submitted_at = NOW() WHERE id = $1",
+        [d],
+      );
+      const res = await runEvidenceMaintenance(db.pool);
+      expect(res.staleDrafts).toBe(0);
+      await other.query('COMMIT');
+    } finally {
+      other.release();
+    }
+    expect((await runEvidenceMaintenance(db.pool)).staleDrafts).toBe(0);
+    expect(await exists(e.id)).toBe(true);
+  });
+
+  it('rejects an invalid EVIDENCE_RETENTION_MONTHS before queueing anything', async () => {
+    const d = await dispute('resolved_upheld', { resolved: '2020-01-01T00:00:00Z' });
+    const e = await evidence(d, 'verified', '2020-01-01T00:00:00Z');
+    const saved = process.env.EVIDENCE_RETENTION_MONTHS;
+    try {
+      for (const bad of ['', '0', '-3', '1.5', 'abc', ' 12']) {
+        process.env.EVIDENCE_RETENTION_MONTHS = bad;
+        await expect(runEvidenceMaintenance(db.pool)).rejects.toThrow('EVIDENCE_RETENTION_MONTHS');
+      }
+    } finally {
+      if (saved === undefined) delete process.env.EVIDENCE_RETENTION_MONTHS;
+      else process.env.EVIDENCE_RETENTION_MONTHS = saved;
+    }
+    expect(await exists(e.id)).toBe(true);
+  });
+
   it('processes more than one batch', async () => {
     const d = await dispute('draft');
     const created = await ago('3 hours');
@@ -377,5 +433,15 @@ describe.skipIf(!testDatabaseAvailable)('evidence maintenance (real Postgres)', 
     );
     const res = await runEvidenceMaintenance(db.pool);
     expect(res.erased).toBe(450);
+  });
+});
+
+describe('parseEvidenceRetentionMonths', () => {
+  it('defaults to 24 when unset and accepts positive integers', () => {
+    expect(parseEvidenceRetentionMonths(undefined)).toBe(24);
+    expect(parseEvidenceRetentionMonths('36')).toBe(36);
+  });
+  it.each(['', '0', '-1', '1.5', 'abc', '12 ', '1e2', 'NaN'])('rejects %j', (bad) => {
+    expect(() => parseEvidenceRetentionMonths(bad)).toThrow('EVIDENCE_RETENTION_MONTHS');
   });
 });

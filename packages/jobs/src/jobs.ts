@@ -14,11 +14,23 @@ const logger = pino({ name: 'jobs' });
  * dispute still references them. Audit trails keep a 5-year floor.
  * Confirm these periods with compliance before go-live.
  */
+/** Unset means 24. Anything but a positive integer string throws (an empty or zero value would erase everything). */
+export function parseEvidenceRetentionMonths(raw: string | undefined): number {
+  if (raw === undefined) return 24;
+  const n = Number(raw);
+  if (!/^[1-9][0-9]*$/.test(raw) || !Number.isSafeInteger(n))
+    throw new Error('EVIDENCE_RETENTION_MONTHS must be a positive integer number of months');
+  return n;
+}
+
 export const RETENTION = {
   transactionMonths: Number(process.env.TRANSACTION_RETENTION_MONTHS ?? 24),
   supersededProfileMonths: Number(process.env.PROFILE_HISTORY_RETENTION_MONTHS ?? 24),
   auditLogYears: 5,
-  evidenceMonths: Number(process.env.EVIDENCE_RETENTION_MONTHS ?? 24),
+  /** Parsed on read so an invalid value cannot break unrelated jobs at import time. */
+  get evidenceMonths(): number {
+    return parseEvidenceRetentionMonths(process.env.EVIDENCE_RETENTION_MONTHS);
+  },
 } as const;
 
 export async function runRetention(pool: Pool): Promise<Record<string, number>> {
@@ -251,6 +263,8 @@ export async function runEvidenceMaintenance(
   staleDrafts: number;
   retained: number;
 }> {
+  // Validate configuration before any queueing.
+  const retentionMonths = RETENTION.evidenceMonths;
   const at = now ?? null;
 
   const expiredPending = await queueAll(
@@ -262,6 +276,8 @@ export async function runEvidenceMaintenance(
     [at, PENDING_WINDOW_HOURS],
   );
 
+  // The dispute row is locked too (as submit/escalate/upload do), so status and dates are
+  // re-checked against committed data and a busy dispute waits for the next run.
   // Idle = the later of the draft's last change and its newest non-deleting upload.
   const staleDrafts = await queueAll(
     pool,
@@ -272,7 +288,7 @@ export async function runEvidenceMaintenance(
              SELECT max(x.created_at) FROM credisync.dispute_evidence x
              WHERE x.dispute_id = d.id AND x.status <> 'deleting'))
            <= COALESCE($1::timestamptz, NOW()) - make_interval(days => $2)
-     ORDER BY e.id LIMIT ${EVIDENCE_BATCH} FOR UPDATE OF e SKIP LOCKED`,
+     ORDER BY e.id LIMIT ${EVIDENCE_BATCH} FOR UPDATE OF d, e SKIP LOCKED`,
     [at, DRAFT_IDLE_DAYS],
   );
 
@@ -285,8 +301,8 @@ export async function runEvidenceMaintenance(
        AND COALESCE(d.ncr_escalated_at, d.resolved_at) IS NOT NULL
        AND COALESCE(d.ncr_escalated_at, d.resolved_at) + make_interval(months => $2)
            <= COALESCE($1::timestamptz, NOW())
-     ORDER BY e.id LIMIT ${EVIDENCE_BATCH} FOR UPDATE OF e SKIP LOCKED`,
-    [at, RETENTION.evidenceMonths],
+     ORDER BY e.id LIMIT ${EVIDENCE_BATCH} FOR UPDATE OF d, e SKIP LOCKED`,
+    [at, retentionMonths],
   );
 
   // Resolved disputes with no usable date keep their files; only a count is logged.
