@@ -193,7 +193,7 @@ resource "aws_s3_bucket_cors_configuration" "evidence" {
   cors_rule {
     allowed_methods = ["PUT"]
     allowed_origins = var.web_origins
-    allowed_headers = ["content-type", "x-amz-server-side-encryption", "x-amz-server-side-encryption-aws-kms-key-id"]
+    allowed_headers = ["content-type", "x-amz-server-side-encryption", "x-amz-server-side-encryption-aws-kms-key-id", "if-none-match"]
     max_age_seconds = 600
   }
 }

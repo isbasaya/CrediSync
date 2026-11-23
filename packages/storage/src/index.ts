@@ -153,12 +153,14 @@ export class S3StorageProvider implements StorageProvider {
       Key: key,
       ContentType: contentType,
       ContentLength: contentLength,
+      // Create-only: a verified object can never be overwritten through a still-valid URL.
+      IfNoneMatch: '*',
       ...(sse ? { ServerSideEncryption: 'aws:kms' as const, SSEKMSKeyId: this.kmsKeyId } : {}),
     });
     const uploadUrl = await presigner.getSignedUrl(signer, command, {
       expiresIn,
       // Sign the SSE headers so the ones in requiredHeaders are the ones enforced.
-      ...(sse ? { unhoistableHeaders: new Set(SSE_HEADERS) } : {}),
+      unhoistableHeaders: new Set(sse ? [...SSE_HEADERS, 'if-none-match'] : ['if-none-match']),
     });
     return {
       uploadUrl,
@@ -166,6 +168,7 @@ export class S3StorageProvider implements StorageProvider {
       expiresIn,
       requiredHeaders: {
         'Content-Type': contentType,
+        'If-None-Match': '*',
         ...(sse
           ? {
               'x-amz-server-side-encryption': 'aws:kms',
@@ -184,7 +187,8 @@ export class S3StorageProvider implements StorageProvider {
         Bucket: this.bucket,
         Key: key,
         ResponseCacheControl: 'no-store',
-        ...(fileName ? { ResponseContentDisposition: contentDisposition(fileName) } : {}),
+        // Always an attachment, whatever the caller passes, so files never render inline.
+        ResponseContentDisposition: contentDisposition(fileName || 'evidence'),
       }),
       { expiresIn },
     );
