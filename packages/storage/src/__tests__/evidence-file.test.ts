@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import {
   sniffEvidenceType,
   sanitizeDisplayName,
+  evidenceDownloadName,
   verifyEvidenceObject,
   createEvidenceDownloadUrl,
   deleteEvidenceObject,
@@ -31,6 +32,24 @@ describe('evidence file primitives', () => {
     expect(sanitizeDisplayName('x'.repeat(500) + '.pdf')).toHaveLength(120);
     expect(sanitizeDisplayName('x'.repeat(500) + '.pdf').endsWith('.pdf')).toBe(true);
     expect(sanitizeDisplayName('   ')).toBe('evidence');
+  });
+
+  it('strips bidi and other format characters, and never splits a surrogate pair', () => {
+    expect(sanitizeDisplayName('invoice\u202Efdp.html')).toBe('invoicefdp.html');
+    expect(sanitizeDisplayName('a\u200Bb\u2028c\u2029d\uFEFF.pdf')).toBe('abcd.pdf');
+    const emoji = '\u{1F600}'.repeat(200) + '.pdf';
+    const out = sanitizeDisplayName(emoji);
+    expect(Array.from(out)).toHaveLength(120);
+    expect(out.endsWith('.pdf')).toBe(true);
+    expect(out).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/);
+  });
+
+  it('download names always take the extension of the verified type', () => {
+    expect(evidenceDownloadName('invoice\u202Efdp.html', 'application/pdf')).toBe('invoicefdp.pdf');
+    expect(evidenceDownloadName('proof.html', 'application/pdf')).toBe('proof.pdf');
+    expect(evidenceDownloadName('photo.exe', 'image/jpeg')).toBe('photo.jpg');
+    expect(evidenceDownloadName('scan', 'image/png')).toBe('scan.png');
+    expect(evidenceDownloadName('.pdf', 'application/pdf')).toBe('.pdf.pdf');
   });
 
   it('rejects a missing, oversized or spoofed object', async () => {

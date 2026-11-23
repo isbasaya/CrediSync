@@ -160,3 +160,5 @@ export async function enqueueEvent(client: PoolClient, event: DomainEvent): Prom
     ],
   );
 }
+
+export * from './evidence-erasure';

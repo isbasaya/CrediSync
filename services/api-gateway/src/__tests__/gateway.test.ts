@@ -1,4 +1,7 @@
 import { describe, it, expect } from 'vitest';
+import http from 'http';
+import type { AddressInfo } from 'net';
+import { forward } from '../proxy';
 import type { Request, Response } from 'express';
 import { deliverSession, originCheck } from '../session';
 import { toFeatures } from '../bank-readiness';
@@ -107,5 +110,40 @@ describe('toFeatures', () => {
     expect(f.net_income).toBe(0);
     expect(f.debt_to_income_ratio).toBeNull();
     expect(f.unified_score).toBe(640);
+  });
+});
+
+describe('forward', () => {
+  it('passes cache-control through so download links are never cached', async () => {
+    const upstream = http.createServer((_req, r) => {
+      r.setHeader('Content-Type', 'application/json');
+      r.setHeader('Cache-Control', 'no-store');
+      r.end(JSON.stringify({ url: 'x', expiresIn: 300 }));
+    });
+    await new Promise<void>((ok) => upstream.listen(0, '127.0.0.1', ok));
+    try {
+      const base = `http://127.0.0.1:${(upstream.address() as AddressInfo).port}`;
+      const headers: Record<string, string> = {};
+      const res = {
+        statusCode: 0,
+        setHeader(k: string, v: string) {
+          headers[k.toLowerCase()] = v;
+        },
+        status(c: number) {
+          res.statusCode = c;
+          return res;
+        },
+        json() {
+          return res;
+        },
+        end() {
+          return res;
+        },
+      };
+      await forward(base, '/x', req({ method: 'GET' }), res as unknown as Response);
+      expect(headers['cache-control']).toBe('no-store');
+    } finally {
+      upstream.close();
+    }
   });
 });

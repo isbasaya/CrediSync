@@ -125,7 +125,7 @@ describe.skipIf(!testDatabaseAvailable)('dispute evidence (real Postgres)', () =
 
   const expireLink = (evidenceId: string) =>
     db.adminPool.query(
-      "UPDATE credisync.dispute_evidence SET upload_url_expires_at = NOW() - interval '1 second' WHERE id = $1",
+      "UPDATE credisync.dispute_evidence SET upload_url_expires_at = NOW() - interval '2 hours' WHERE id = $1",
       [evidenceId],
     );
   const ageRow = (evidenceId: string, age: string) =>
@@ -196,10 +196,11 @@ describe.skipIf(!testDatabaseAvailable)('dispute evidence (real Postgres)', () =
     // The upload link is still live, so the row stays as the handle on the object.
     expect(await statusOf(up.evidence.id)).toBe('deleting');
     const audit = await db.adminPool.query(
-      "SELECT payload FROM credisync.regulatory_audit_logs WHERE event_type = 'data_deletion_completed' AND payload->>'evidence_id' = $1",
+      "SELECT payload FROM credisync.regulatory_audit_logs WHERE event_type = 'data_deletion_request' AND payload->>'evidence_id' = $1",
       [up.evidence.id],
     );
     expect(audit.rows).toHaveLength(1);
+    expect((await auditFor(up.evidence.id, 'data_deletion_completed')).rows).toHaveLength(0);
     expect(audit.rows[0].payload).toEqual({
       action: 'delete_evidence',
       evidence_id: up.evidence.id,
@@ -333,7 +334,7 @@ describe.skipIf(!testDatabaseAvailable)('dispute evidence (real Postgres)', () =
     const again = await withSystem(db.pool, (c) => markEvidenceDeleting(c, { disputeId: draftId }));
     expect(again).toEqual([]);
     const audit = await db.adminPool.query(
-      "SELECT 1 FROM credisync.regulatory_audit_logs WHERE event_type = 'data_deletion_completed' AND payload->>'action' = 'delete_evidence' AND payload->>'evidence_id' = ANY($1)",
+      "SELECT 1 FROM credisync.regulatory_audit_logs WHERE event_type = 'data_deletion_request' AND payload->>'action' = 'delete_evidence' AND payload->>'evidence_id' = ANY($1)",
       [[a.evidence.id, b.evidence.id]],
     );
     expect(audit.rowCount).toBe(2);
@@ -342,6 +343,27 @@ describe.skipIf(!testDatabaseAvailable)('dispute evidence (real Postgres)', () =
     await eraseMarked(db.pool, rows);
     expect(await statusOf(a.evidence.id)).toBeUndefined();
     expect(await statusOf(b.evidence.id)).toBeUndefined();
+    expect((await auditFor(a.evidence.id, 'data_deletion_completed')).rows).toHaveLength(1);
+  });
+
+  it('keeps a row whose link expired less than an hour ago', async () => {
+    const draftId = await newDraft();
+    const up = await upload(ALICE, draftId, SPOOF, { complete: false });
+    await db.adminPool.query(
+      "UPDATE credisync.dispute_evidence SET upload_url_expires_at = NOW() - interval '59 minutes' WHERE id = $1",
+      [up.evidence.id],
+    );
+    const key = await keyOf(up.evidence.id);
+    expect((await complete(ALICE, draftId, up.evidence.id)).status).toBe(400);
+    expect(storage.has(key)).toBe(false);
+    expect(await statusOf(up.evidence.id)).toBe('deleting');
+    expect((await auditFor(up.evidence.id, 'data_deletion_completed')).rows).toHaveLength(0);
+    await db.adminPool.query(
+      "UPDATE credisync.dispute_evidence SET upload_url_expires_at = NOW() - interval '61 minutes' WHERE id = $1",
+      [up.evidence.id],
+    );
+    await eraseMarked(db.pool, [{ id: up.evidence.id, storage_key: key }]);
+    expect(await statusOf(up.evidence.id)).toBeUndefined();
   });
 
   it('blocks sending with a pending upload, then allows it once resolved', async () => {
@@ -500,6 +522,7 @@ describe.skipIf(!testDatabaseAvailable)('dispute evidence (real Postgres)', () =
     expect(res.status).toBe(200);
     expect(await statusOf(up.evidence.id)).toBe('deleting');
     expect(storage.has(key)).toBe(true);
+    expect((await auditFor(up.evidence.id, 'data_deletion_completed')).rows).toHaveLength(0);
   });
 
   it('deleting a draft queues and erases its files', async () => {
@@ -533,6 +556,8 @@ describe.skipIf(!testDatabaseAvailable)('dispute evidence (real Postgres)', () =
     );
     expect(row.rows[0]).toEqual({ status: 'deleting', dispute_id: null });
     expect(storage.has(key)).toBe(true);
+    expect((await auditFor(up.evidence.id, 'data_deletion_completed')).rows).toHaveLength(0);
+    expect((await auditFor(up.evidence.id, 'data_deletion_request')).rows).toHaveLength(1);
   });
 
   it('deleting a sent dispute is refused and keeps its evidence', async () => {
@@ -604,17 +629,42 @@ describe.skipIf(!testDatabaseAvailable)('dispute evidence (real Postgres)', () =
     expect((await adminDownload(ops, sentDraft, p2.evidence.id)).status).toBe(404);
   });
 
-  it('deletion audit uses delete_evidence with no key or filename', async () => {
+  it('deletion audit uses delete_evidence with no key or filename, completed only after erasure', async () => {
     const draftId = await newDraft();
     const up = await upload(ALICE, draftId, PDF);
     const key = await keyOf(up.evidence.id);
     await remove(ALICE, draftId, up.evidence.id);
-    const audit = await auditFor(up.evidence.id, 'data_deletion_completed');
-    expect(audit.rows).toHaveLength(1);
-    expect(audit.rows[0].payload).toEqual({
+    expect((await auditFor(up.evidence.id, 'data_deletion_completed')).rows).toHaveLength(0);
+    const requested = await auditFor(up.evidence.id, 'data_deletion_request');
+    expect(requested.rows).toHaveLength(1);
+    expect(requested.rows[0].payload).toEqual({
       action: 'delete_evidence',
       evidence_id: up.evidence.id,
     });
-    expect(JSON.stringify(audit.rows[0].payload)).not.toContain(key);
+    await expireLink(up.evidence.id);
+    await eraseMarked(db.pool, [{ id: up.evidence.id, storage_key: key }]);
+    const done = await auditFor(up.evidence.id, 'data_deletion_completed');
+    expect(done.rows).toHaveLength(1);
+    expect(done.rows[0].payload).toEqual({
+      action: 'delete_evidence',
+      evidence_id: up.evidence.id,
+    });
+    expect(JSON.stringify(done.rows[0].payload)).not.toContain(key);
+  });
+
+  it('downloads are named from the verified type, never a hostile extension', async () => {
+    const draftId = await newDraft();
+    const res = await requestUpload(ALICE, draftId, { fileName: 'invoice\u202Efdp.html' });
+    const id = res.body.evidence.id;
+    storage.put(await keyOf(id), PDF, 'application/pdf');
+    await complete(ALICE, draftId, id);
+    const url: string = (await download(ALICE, draftId, id)).body.url;
+    expect(decodeURIComponent(url)).toContain('name=invoicefdp.pdf');
+    expect(url).not.toContain('html');
+    await request(app).post(`/disputes/${draftId}/submit`).set(as(ALICE));
+    const staff: string = (
+      await adminDownload(internalHeaders({ id: ADMIN, role: 'admin' }), draftId, id)
+    ).body.url;
+    expect(decodeURIComponent(staff)).toContain('name=invoicefdp.pdf');
   });
 });

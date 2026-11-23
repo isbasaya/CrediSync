@@ -1,9 +1,10 @@
 import type { Pool, PoolClient } from 'pg';
 import pino from 'pino';
-import { withSystem, withUser, writeAudit } from '@credisync/db';
+import { finishEvidenceErasure, withSystem, withUser, writeAudit } from '@credisync/db';
 import type { DisputeEvidence } from '@credisync/types';
 import {
   createEvidenceDownloadUrl,
+  evidenceDownloadName,
   createEvidenceRetryUpload,
   createEvidenceUpload,
   deleteEvidenceObject,
@@ -164,7 +165,7 @@ export async function markEvidenceDeleting(
   for (const row of r.rows) {
     await writeAudit(client, {
       userId: row.user_id,
-      eventType: 'data_deletion_completed',
+      eventType: 'data_deletion_request',
       resourceType: 'dispute_evidence',
       resourceId: row.id,
       payload: { action: 'delete_evidence', evidence_id: row.id },
@@ -174,32 +175,17 @@ export async function markEvidenceDeleting(
 }
 
 /**
- * Deletes the object, then the row once its upload link has expired. Never throws: a
- * failure, or a link that may still be live, leaves the row 'deleting' so the scheduled
- * job deletes the object again later. Logs only the evidence id.
+ * Deletes the object, then the row once no upload link can still recreate it (see
+ * finishEvidenceErasure). Never throws: a failure, or a link that may still be live, leaves
+ * the row 'deleting' so the scheduled job deletes the object again later. Logs only ids.
  */
 export async function eraseMarked(
   pool: Pool,
   rows: Array<{ id: string; storage_key: string }>,
 ): Promise<void> {
-  for (const row of rows) {
-    try {
-      // Always attempt the delete. The row (our only handle on the object) goes only once
-      // no issued upload link can still recreate the object; until then the job retries.
-      await deleteEvidenceObject(row.storage_key);
-      await withSystem(pool, (c) =>
-        c.query(
-          `DELETE FROM credisync.dispute_evidence
-           WHERE id = $1 AND status = 'deleting' AND upload_url_expires_at <= NOW()`,
-          [row.id],
-        ),
-      );
-    } catch (err) {
-      logger.warn(
-        { evidenceId: row.id, errorName: err instanceof Error ? err.name : 'unknown' },
-        'evidence erase failed; left for retry',
-      );
-    }
+  const { failed } = await finishEvidenceErasure(pool, rows, deleteEvidenceObject);
+  for (const evidenceId of failed) {
+    logger.warn({ evidenceId }, 'evidence erase failed; left for retry');
   }
 }
 
@@ -511,8 +497,12 @@ export async function evidenceDownloadUrl(
   evidenceId: string,
 ): Promise<{ url: string; expiresIn: 300 }> {
   return withUser(pool, userId, async (client) => {
-    const r = await client.query<{ storage_key: string; display_name: string }>(
-      `SELECT storage_key, display_name FROM credisync.dispute_evidence
+    const r = await client.query<{
+      storage_key: string;
+      display_name: string;
+      content_type: string;
+    }>(
+      `SELECT storage_key, display_name, content_type FROM credisync.dispute_evidence
        WHERE id = $1 AND dispute_id = $2 AND status = 'verified'`,
       [evidenceId, disputeId],
     );
@@ -525,7 +515,10 @@ export async function evidenceDownloadUrl(
       resourceId: evidenceId,
       payload: { action: 'download_evidence', evidence_id: evidenceId },
     });
-    const url = await createEvidenceDownloadUrl(row.storage_key, row.display_name);
+    const url = await createEvidenceDownloadUrl(
+      row.storage_key,
+      evidenceDownloadName(row.display_name, row.content_type),
+    );
     return { url, expiresIn: 300 };
   });
 }
@@ -551,8 +544,12 @@ export async function adminEvidenceDownloadUrl(
         'Evidence is only available for disputes that have been sent',
       );
     }
-    const r = await client.query<{ storage_key: string; display_name: string }>(
-      `SELECT storage_key, display_name FROM credisync.dispute_evidence
+    const r = await client.query<{
+      storage_key: string;
+      display_name: string;
+      content_type: string;
+    }>(
+      `SELECT storage_key, display_name, content_type FROM credisync.dispute_evidence
        WHERE id = $1 AND dispute_id = $2 AND status = 'verified'`,
       [evidenceId, disputeId],
     );
@@ -566,7 +563,10 @@ export async function adminEvidenceDownloadUrl(
       resourceId: evidenceId,
       payload: { action: 'download_evidence', evidence_id: evidenceId },
     });
-    const url = await createEvidenceDownloadUrl(row.storage_key, row.display_name);
+    const url = await createEvidenceDownloadUrl(
+      row.storage_key,
+      evidenceDownloadName(row.display_name, row.content_type),
+    );
     return { url, expiresIn: 300 };
   });
 }

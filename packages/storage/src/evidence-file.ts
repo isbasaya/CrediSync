@@ -26,14 +26,33 @@ export function sanitizeDisplayName(raw: string): string {
   const cleaned = base
     .replace(/[<>]/g, ' ')
     .replace(/["'`]/g, '')
-    // eslint-disable-next-line no-control-regex
-    .replace(/[\u0000-\u001f\u007f-\u009f]/g, '')
+    // Control, format (bidi overrides, zero-width, ...) and line/paragraph separators.
+    .replace(/[\p{Cc}\p{Cf}\u2028\u2029]/gu, '')
     .trim();
   if (!cleaned || cleaned === '.' || cleaned === '..') return 'evidence';
-  if (cleaned.length <= MAX_NAME_LENGTH) return cleaned;
+  const chars = Array.from(cleaned); // code points, so a surrogate pair is never split
+  if (chars.length <= MAX_NAME_LENGTH) return cleaned;
   const dot = cleaned.lastIndexOf('.');
-  const ext = dot > 0 && cleaned.length - dot <= 10 ? cleaned.slice(dot) : '';
-  return cleaned.slice(0, MAX_NAME_LENGTH - ext.length) + ext;
+  const ext = dot > 0 && cleaned.length - dot <= 10 ? Array.from(cleaned.slice(dot)) : [];
+  return chars
+    .slice(0, MAX_NAME_LENGTH - ext.length)
+    .concat(ext)
+    .join('');
+}
+
+const EXTENSIONS: Record<string, string> = {
+  'application/pdf': '.pdf',
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+};
+
+/** The name a downloaded file is saved as: the stem, with the extension of the verified type. */
+export function evidenceDownloadName(displayName: string, contentType: string): string {
+  const ext = EXTENSIONS[contentType] ?? '';
+  const safe = sanitizeDisplayName(displayName);
+  const dot = safe.lastIndexOf('.');
+  const stem = dot > 0 ? safe.slice(0, dot) : safe;
+  return (stem.trim() || 'evidence') + ext;
 }
 
 export type EvidenceVerification =

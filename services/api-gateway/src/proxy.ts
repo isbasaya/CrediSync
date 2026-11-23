@@ -82,7 +82,7 @@ export async function callService(
   return { status: response.status, data, headers: response.headers };
 }
 
-const PASSTHROUGH_HEADERS = ['retry-after', 'content-disposition'];
+const PASSTHROUGH_HEADERS = ['retry-after', 'content-disposition', 'cache-control'];
 
 /** Forwards and writes the upstream response to the client. */
 export async function forward(
