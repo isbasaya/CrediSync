@@ -130,6 +130,9 @@ export class S3StorageProvider implements StorageProvider {
     const make = (ep?: string) =>
       new s3.S3Client({
         region: this.region,
+        // Without this the SDK bakes the CRC32 of an empty body into presigned PUT URLs, which
+        // real S3 rejects (BadDigest) for any non-empty upload; MinIO ignores it.
+        requestChecksumCalculation: 'WHEN_REQUIRED' as const,
         ...(ep ? { endpoint: ep, forcePathStyle: true } : {}),
       });
     const client = make(endpoint);
@@ -247,23 +250,26 @@ export class S3StorageProvider implements StorageProvider {
 
 let provider: StorageProvider | null = null;
 
+/**
+ * Picks the provider from the environment. Real S3 needs a KMS key for SSE. A local
+ * MinIO endpoint does not, and KMS_KEY_ID also switches field encryption to real KMS,
+ * so a local endpoint works without one.
+ */
+export function providerFromEnv(env: NodeJS.ProcessEnv = process.env): StorageProvider {
+  const bucket = env.EVIDENCE_BUCKET;
+  const local = isLocalEnv(env);
+  const endpoint = local ? env.S3_ENDPOINT || undefined : undefined;
+  const kmsKeyId = env.KMS_KEY_ID || (endpoint ? 'local-minio-no-kms' : undefined);
+  if (!bucket || !kmsKeyId) return new LocalStorageProvider();
+  // Endpoint overrides (MinIO) are never honoured outside local and test environments.
+  const options: S3ProviderOptions = local
+    ? { endpoint, publicEndpoint: env.S3_PUBLIC_ENDPOINT || undefined }
+    : {};
+  return new S3StorageProvider(bucket, kmsKeyId, env.AWS_REGION ?? 'af-south-1', options);
+}
+
 export function current(): StorageProvider {
-  if (!provider) {
-    const bucket = process.env.EVIDENCE_BUCKET;
-    const kmsKeyId = process.env.KMS_KEY_ID;
-    if (bucket && kmsKeyId) {
-      // Endpoint overrides (MinIO) are never honoured outside local and test environments.
-      const options: S3ProviderOptions = isLocalEnv()
-        ? {
-            endpoint: process.env.S3_ENDPOINT || undefined,
-            publicEndpoint: process.env.S3_PUBLIC_ENDPOINT || undefined,
-          }
-        : {};
-      provider = new S3StorageProvider(bucket, kmsKeyId, undefined, options);
-    } else {
-      provider = new LocalStorageProvider();
-    }
-  }
+  if (!provider) provider = providerFromEnv();
   return provider;
 }
 

@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { contentDisposition, S3StorageProvider } from '../index';
+import {
+  contentDisposition,
+  LocalStorageProvider,
+  providerFromEnv,
+  S3StorageProvider,
+} from '../index';
 
 beforeAll(() => {
   process.env.AWS_ACCESS_KEY_ID = 'test-access-key';
@@ -73,6 +78,12 @@ describe('S3StorageProvider', () => {
     expect(signed.split(';')).toContain('if-none-match');
   });
 
+  it('does not bake a checksum of the empty body into the presigned PUT URL', async () => {
+    const up = await provider().presignUpload('k.pdf', 'application/pdf', 10, 900);
+    const q = new URL(up.uploadUrl).searchParams;
+    expect([...q.keys()].filter((k) => k.toLowerCase().includes('checksum'))).toEqual([]);
+  });
+
   it('maps a 404 on HEAD to null and rethrows other errors', async () => {
     const p = provider();
     const stub = (err: unknown) =>
@@ -92,5 +103,29 @@ describe('S3StorageProvider', () => {
       Object.assign(new Error('x'), { name: 'AccessDenied', $metadata: { httpStatusCode: 403 } }),
     );
     await expect(p.headObject('k')).rejects.toThrow();
+  });
+});
+
+describe('providerFromEnv', () => {
+  const base = { NODE_ENV: 'development', AWS_REGION: 'af-south-1' };
+
+  it('uses MinIO without a KMS key, which would also switch field encryption to real KMS', () => {
+    const p = providerFromEnv({
+      ...base,
+      EVIDENCE_BUCKET: 'b',
+      S3_ENDPOINT: 'http://minio:9000',
+    });
+    expect(p).toBeInstanceOf(S3StorageProvider);
+  });
+
+  it('stays on the local stub without a bucket, or with a bucket but no endpoint or key', () => {
+    expect(providerFromEnv(base)).toBeInstanceOf(LocalStorageProvider);
+    expect(providerFromEnv({ ...base, EVIDENCE_BUCKET: 'b' })).toBeInstanceOf(LocalStorageProvider);
+  });
+
+  it('ignores a local endpoint outside development and test', () => {
+    const env = { NODE_ENV: 'production', EVIDENCE_BUCKET: 'b', S3_ENDPOINT: 'http://minio:9000' };
+    expect(providerFromEnv(env)).toBeInstanceOf(LocalStorageProvider);
+    expect(providerFromEnv({ ...env, KMS_KEY_ID: 'k' })).toBeInstanceOf(S3StorageProvider);
   });
 });

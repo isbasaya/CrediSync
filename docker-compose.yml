@@ -17,6 +17,21 @@ x-node-env: &node-env
   HMAC_KEY: credisync-dev-hmac-key-do-not-use-outside-development
   WEB_APP_URL: http://localhost:3000
 
+# Local S3 for dispute evidence (dev-only values, never reused outside this file).
+# KMS_KEY_ID is deliberately unset: it would also switch field encryption to real AWS KMS,
+# and MinIO has no KMS. The storage provider accepts a local endpoint without it.
+x-evidence-env: &evidence-env
+  S3_ENDPOINT: http://minio:9000
+  S3_PUBLIC_ENDPOINT: http://localhost:9000
+  EVIDENCE_BUCKET: credisync-evidence-dev
+  AWS_REGION: af-south-1
+  AWS_ACCESS_KEY_ID: credisync-minio-dev
+  AWS_SECRET_ACCESS_KEY: credisync-minio-dev-secret-not-for-production
+
+# Docker Hub no longer serves MinIO release tags, so the image is pinned by digest
+# (RELEASE.2025-09-07T16-13-09Z, which also ships the `mc` client used by minio-init).
+x-minio-image: &minio-image minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+
 services:
   postgres:
     image: postgres:15-alpine
@@ -37,6 +52,38 @@ services:
 
   redis:
     image: redis:7-alpine
+
+  # S3-compatible store for evidence uploads. Only the S3 API is published (to
+  # localhost, so presigned URLs work from a browser); the console is not.
+  minio:
+    image: *minio-image
+    command: ['server', '/data']
+    environment:
+      MINIO_ROOT_USER: credisync-minio-dev
+      MINIO_ROOT_PASSWORD: credisync-minio-dev-secret-not-for-production
+      MINIO_REGION: af-south-1
+    ports:
+      - '127.0.0.1:9000:9000'
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -fs http://localhost:9000/minio/health/live']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  minio-init:
+    image: *minio-image
+    entrypoint: ['/bin/sh', '-c']
+    command:
+      - >-
+        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" &&
+        mc mb --ignore-existing local/credisync-evidence-dev
+    environment:
+      MINIO_ROOT_USER: credisync-minio-dev
+      MINIO_ROOT_PASSWORD: credisync-minio-dev-secret-not-for-production
+    depends_on:
+      minio: { condition: service_healthy }
 
   migrate:
     build: { context: ., args: { TARGET: packages/migrations } }
@@ -60,9 +107,13 @@ services:
 
   dispute-engine:
     build: { context: ., args: { TARGET: services/dispute-engine } }
-    environment: { <<: *node-env, PORT: '4002', DISPUTE_SUBMISSION_CHANNEL: manual }
+    environment:
+      <<: [*node-env, *evidence-env]
+      PORT: '4002'
+      DISPUTE_SUBMISSION_CHANNEL: manual
     depends_on:
       migrate: { condition: service_completed_successfully }
+      minio-init: { condition: service_completed_successfully }
 
   open-banking:
     build: { context: ., args: { TARGET: services/open-banking } }
@@ -106,10 +157,12 @@ services:
     build: { context: ., args: { TARGET: packages/jobs } }
     entrypoint: ['node', 'packages/jobs/dist/runner.js']
     command: ['all']
-    environment: *node-env
+    environment: { <<: [*node-env, *evidence-env] }
     profiles: ['jobs']
     depends_on:
       migrate: { condition: service_completed_successfully }
+      minio-init: { condition: service_completed_successfully }
 
 volumes:
   pgdata:
+  miniodata:
