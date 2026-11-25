@@ -35,12 +35,14 @@
 ### Task 1: Schema and storage primitives
 
 **Files:**
+
 - Create: `packages/migrations/migrations/20261123120000_dispute_evidence.sql`
 - Create: `packages/storage/src/evidence-file.ts`, `packages/storage/src/memory-provider.ts`
 - Create: `packages/storage/src/__tests__/evidence-file.test.ts`, `packages/storage/vitest.config.ts`
 - Modify: `packages/storage/src/index.ts`, `packages/storage/package.json` (add `test`), `db/schema.sql`, `packages/types/src/dispute.ts`
 
 **Interfaces:**
+
 - Produces in `@credisync/storage`:
   - `sniffEvidenceType(bytes: Buffer): 'application/pdf' | 'image/jpeg' | 'image/png' | null`
   - `sanitizeDisplayName(raw: string): string`
@@ -57,7 +59,9 @@
 it('identifies real files by signature', () => {
   expect(sniffEvidenceType(Buffer.from('%PDF-1.7'))).toBe('application/pdf');
   expect(sniffEvidenceType(Buffer.from([0xff, 0xd8, 0xff, 0xe0]))).toBe('image/jpeg');
-  expect(sniffEvidenceType(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))).toBe('image/png');
+  expect(sniffEvidenceType(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))).toBe(
+    'image/png',
+  );
   expect(sniffEvidenceType(Buffer.from('MZ\x90\x00'))).toBeNull();
 });
 it('sanitises hostile filenames', () => {
@@ -71,11 +75,24 @@ it('sanitises hostile filenames', () => {
 it('rejects a missing, oversized or spoofed object', async () => {
   const p = new InMemoryStorageProvider();
   setStorageProvider(p);
-  expect(await verifyEvidenceObject('none', 'application/pdf')).toEqual({ ok: false, reason: 'missing' });
-  p.put('big', Buffer.concat([Buffer.from('%PDF'), Buffer.alloc(MAX_EVIDENCE_BYTES)]), 'application/pdf');
-  expect(await verifyEvidenceObject('big', 'application/pdf')).toEqual({ ok: false, reason: 'too_large' });
+  expect(await verifyEvidenceObject('none', 'application/pdf')).toEqual({
+    ok: false,
+    reason: 'missing',
+  });
+  p.put(
+    'big',
+    Buffer.concat([Buffer.from('%PDF'), Buffer.alloc(MAX_EVIDENCE_BYTES)]),
+    'application/pdf',
+  );
+  expect(await verifyEvidenceObject('big', 'application/pdf')).toEqual({
+    ok: false,
+    reason: 'too_large',
+  });
   p.put('exe', Buffer.from('MZ\x90\x00'), 'application/pdf');
-  expect(await verifyEvidenceObject('exe', 'application/pdf')).toEqual({ ok: false, reason: 'type_mismatch' });
+  expect(await verifyEvidenceObject('exe', 'application/pdf')).toEqual({
+    ok: false,
+    reason: 'type_mismatch',
+  });
   p.put('ok', Buffer.from('%PDF-1.7 body'), 'application/pdf');
   expect(await verifyEvidenceObject('ok', 'application/pdf')).toEqual({ ok: true, size: 13 });
 });
@@ -101,11 +118,13 @@ it('rejects a missing, oversized or spoofed object', async () => {
 ### Task 2: Attach and verify evidence
 
 **Files:**
+
 - Create: `services/dispute-engine/src/evidence.ts`, `services/dispute-engine/src/__tests__/evidence.integration.test.ts`
 - Modify: `services/dispute-engine/src/service.ts`, `app.ts`, `types.ts`, `__tests__/disputes.integration.test.ts` (remove the `evidenceKeys` test)
 - Modify: `services/api-gateway/src/app.ts` and its test
 
 **Interfaces:**
+
 - Consumes: Task 1 storage functions.
 - Produces in `evidence.ts`:
   - `requestEvidenceUpload(pool, userId, disputeId, input: { contentType: string; contentLength: number; fileName: string }): Promise<{ evidence: DisputeEvidence; uploadUrl: string; requiredHeaders: Record<string, string>; expiresIn: number }>`
@@ -121,7 +140,9 @@ The scheduled job cannot import letter templates from this service, so letters a
 ```ts
 it('adds evidence wording only after verification', async () => {
   const up = await upload(ALICE, draftId, pdfBytes);
-  expect((await get(ALICE, draftId)).body.letterContent).not.toContain('Supporting evidence is attached');
+  expect((await get(ALICE, draftId)).body.letterContent).not.toContain(
+    'Supporting evidence is attached',
+  );
   const done = await complete(ALICE, draftId, up.evidence.id);
   expect(done.status).toBe(200);
   expect(done.body.letterContent).toContain('Supporting evidence is attached');
@@ -130,7 +151,10 @@ it('adds evidence wording only after verification', async () => {
 it('completing twice succeeds once', async () => {
   const before = (await get(ALICE, draftId)).body.letterVersion;
   const up = await upload(ALICE, draftId, pdfBytes);
-  await Promise.all([complete(ALICE, draftId, up.evidence.id), complete(ALICE, draftId, up.evidence.id)]);
+  await Promise.all([
+    complete(ALICE, draftId, up.evidence.id),
+    complete(ALICE, draftId, up.evidence.id),
+  ]);
   expect((await get(ALICE, draftId)).body.letterVersion).toBeLessThanOrEqual(before + 1);
 });
 it('rejects and erases a spoofed file', async () => {
@@ -147,7 +171,9 @@ it('blocks sending with a pending upload', async () => {
   expect(res.body.error).toBe('evidence_pending');
 });
 it('enforces 10 files under concurrency', async () => {
-  const results = await Promise.all(Array.from({ length: 15 }, () => requestUpload(ALICE, limitDraft)));
+  const results = await Promise.all(
+    Array.from({ length: 15 }, () => requestUpload(ALICE, limitDraft)),
+  );
   expect(results.filter((r) => r.status === 201)).toHaveLength(10);
   expect(results.filter((r) => r.status === 409)).toHaveLength(5);
 });
@@ -176,9 +202,11 @@ it('refuses to complete after the dispute was sent, and queues the file', async 
 ### Task 3: Downloads and deletion
 
 **Files:**
+
 - Modify: `services/dispute-engine/src/evidence.ts`, `service.ts`, `app.ts`, `__tests__/evidence.integration.test.ts`, `services/api-gateway/src/app.ts`
 
 **Interfaces:**
+
 - Produces:
   - `evidenceDownloadUrl(pool, userId, disputeId, evidenceId): Promise<{ url: string; expiresIn: 300 }>`
   - `adminEvidenceDownloadUrl(pool, actorId, disputeId, evidenceId): Promise<{ url: string; expiresIn: 300 }>`
@@ -214,10 +242,12 @@ it('deletion audit uses delete_evidence with no key or filename', ...);
 ### Task 4: Evidence job and infrastructure
 
 **Files:**
+
 - Modify: `packages/jobs/src/jobs.ts`, `runner.ts`, `src/__tests__/jobs.integration.test.ts`
 - Modify: `infra/terraform/schedules.tf`, `infra/terraform/data.tf`
 
 **Interfaces:**
+
 - Produces: `runEvidenceMaintenance(pool: Pool, now?: Date): Promise<{ erased: number; failed: number; expiredPending: number; staleDrafts: number; retained: number }>`, and `RETENTION.evidenceMonths` from `EVIDENCE_RETENTION_MONTHS`.
 
 - [ ] **Step 1: Write failing tests**
@@ -246,9 +276,11 @@ it('a storage failure is counted and retried next run', ...);
 ### Task 5: Local S3 with MinIO
 
 **Files:**
+
 - Modify: `docker-compose.yml`, `services/dispute-engine/.env.example`, `.claude/skills/run-credisync/SKILL.md` (local only, not committed)
 
 **Interfaces:**
+
 - Consumes: `S3_ENDPOINT`, `S3_PUBLIC_ENDPOINT`, `EVIDENCE_BUCKET`, `KMS_KEY_ID` from Task 1.
 
 - [ ] **Step 1: Add services.** `minio` with a pinned image tag, dev-only credentials, host port `9000`, a named volume and a healthcheck. A one-shot `minio-init` creates bucket `credisync-evidence-dev`. Give `dispute-engine` and `jobs` `S3_ENDPOINT=http://minio:9000`, `S3_PUBLIC_ENDPOINT=http://localhost:9000`, `EVIDENCE_BUCKET`, a local `KMS_KEY_ID` placeholder and the MinIO credentials as `AWS_*`, with `AWS_REGION=af-south-1`.
@@ -262,10 +294,12 @@ it('a storage failure is counted and retried next run', ...);
 ### Task 6: Web evidence UI
 
 **Files:**
+
 - Create: `web/src/components/EvidenceSection.tsx`, `web/src/lib/evidence.ts`, `web/src/lib/__tests__/evidence.test.ts`
 - Modify: `web/src/components/DraftReview.tsx`, `web/src/lib/api-client.ts`, `web/src/lib/types.ts`
 
 **Interfaces:**
+
 - Produces in `evidence.ts`: `validateEvidenceFile(file: { type: string; size: number }, existingCount: number): string | null`, `formatFileSize(bytes: number): string`.
 - Produces in `api-client.ts`: `requestEvidenceUpload`, `putEvidenceFile(url, headers, file, onProgress: (pct: number) => void)` using `XMLHttpRequest` with **no credentials**, `completeEvidence`, `removeEvidence`, `evidenceDownloadUrl`.
 - `EvidenceSection` props: `{ dispute: Dispute; onChange: (d: Dispute) => void; disabled: boolean }`.
@@ -285,9 +319,11 @@ it('a storage failure is counted and retried next run', ...);
 ### Task 7: Admin evidence downloads
 
 **Files:**
+
 - Modify: `admin/src/app/disputes/page.tsx` (`DisputeUpdatePanel`, near the lodging letter link at line 164), its types and API helper
 
 **Interfaces:**
+
 - Consumes: `GET /api/admin/disputes/:id/evidence/:evidenceId/download-url`, and `evidence` on the dispute.
 
 - [ ] **Step 1: Implement.** List verified files by name, type and size, each with a Download button that fetches a fresh link on click. Use the existing `LoadError` pattern. Show `No evidence attached` when empty. Add the line `Files come from consumers and are not malware-scanned yet.` until scanning ships.
@@ -301,10 +337,12 @@ it('a storage failure is counted and retried next run', ...);
 ### Task 8: Mobile evidence and draft review
 
 **Files:**
+
 - Create: `mobile/lib/screens/dispute_review_screen.dart`, `mobile/lib/services/evidence_validation.dart`, `mobile/test/evidence_validation_test.dart`
 - Modify: `mobile/lib/screens/dispute_create_screen.dart`, `mobile/lib/services/dispute_service.dart`, `mobile/pubspec.yaml`, `android/app/src/main/AndroidManifest.xml`, `ios/Runner/Info.plist`
 
 **Interfaces:**
+
 - Produces: `String? validateEvidence(String contentType, int size, int existingCount)`; `DisputeEvidence` model; `DisputeService.getDispute`, `uploadEvidence(disputeId, fileName, contentType, bytes, onProgress)`, `removeEvidence`, `deleteDraft`.
 - `DisputeReviewScreen({ required String disputeId })` replaces the current dialog.
 
@@ -323,6 +361,7 @@ it('a storage failure is counted and retried next run', ...);
 ### Task 9: Compliance docs and end-to-end verification
 
 **Files:**
+
 - Modify: `docs/legal-review-pack.md`, `docs/go-live-checklist.md`, `docs/regulatory-figures.md`
 - Create (not committed): `.claude/skills/run-credisync/evidence.cjs`
 

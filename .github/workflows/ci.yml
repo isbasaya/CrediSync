@@ -87,6 +87,10 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          # Pinned so analyze results match local runs. Newer stable releases deprecate
+          # package:flutter/material.dart in favour of package:material_ui; move to that
+          # deliberately, then bump this.
+          flutter-version: 3.47.0
           cache: true
       - run: flutter pub get
       - run: flutter analyze
@@ -107,8 +111,11 @@ jobs:
       - run: terraform init -backend=false -input=false
       - run: terraform validate
       - name: Trivy (high and critical)
-        uses: aquasecurity/trivy-action@0.28.0
+        # Pinned by commit: this repository's tags were rewritten in the 2026 supply-chain
+        # incident and the old un-prefixed tags (e.g. 0.28.0) no longer exist.
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
+          version: v0.70.0
           scan-type: config
           scan-ref: infra/terraform
           severity: HIGH,CRITICAL
