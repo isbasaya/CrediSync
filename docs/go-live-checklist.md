@@ -13,6 +13,13 @@ Tick the owner items as they close; launch when the list is clear.
 - [ ] Regulatory figures confirmed — [regulatory-figures.md](regulatory-figures.md).
 - ✅ Consent required, versioned and recorded; withdraw at any time.
 - ✅ POPIA s23 export and s24 erasure; append-only audit log with 5-year floor.
+- [ ] **Blocker: malware scanning before staff can open consumer files.** Dispute evidence (PDF,
+      JPEG, PNG) is checked for type and size only. Scan uploads (e.g. GuardDuty Malware
+      Protection for S3) and block staff downloads of unscanned or infected files; until then the
+      admin portal warns staff that files are not scanned.
+- Note for POPIA erasure reporting: evidence and draft deletions write `data_deletion_completed`
+  audit records with `payload.action` of `delete_evidence` or `delete_draft_dispute`. Reports of
+  account erasures must filter these out, or they will be counted as account deletions.
 
 ## Partners
 

@@ -46,13 +46,17 @@ Code: `services/dispute-engine/src/deadlines.ts`.
 
 ## Retention periods
 
-| Data                       | Period                      | Setting                               |
-| -------------------------- | --------------------------- | ------------------------------------- |
-| Regulatory audit log       | 5 years minimum             | Fixed in the database trigger and job |
-| Raw bank transactions      | 24 months                   | `TRANSACTION_RETENTION_MONTHS`        |
-| Superseded credit profiles | 24 months (unless disputed) | `PROFILE_HISTORY_RETENTION_MONTHS`    |
-| Published outbox events    | 7 days                      | `packages/jobs/src/jobs.ts`           |
-| Deletion grace period      | 7 days                      | `services/auth/src/service.ts`        |
+| Data                       | Period                                     | Setting                                   |
+| -------------------------- | ------------------------------------------ | ----------------------------------------- |
+| Regulatory audit log       | 5 years minimum                            | Fixed in the database trigger and job     |
+| Raw bank transactions      | 24 months                                  | `TRANSACTION_RETENTION_MONTHS`            |
+| Superseded credit profiles | 24 months (unless disputed)                | `PROFILE_HISTORY_RETENTION_MONTHS`        |
+| Published outbox events    | 7 days                                     | `packages/jobs/src/jobs.ts`               |
+| Deletion grace period      | 7 days                                     | `services/auth/src/service.ts`            |
+| Dispute evidence           | 24 months from escalation, else resolution | `EVIDENCE_RETENTION_MONTHS`               |
+| Evidence on idle drafts    | 90 days                                    | `packages/jobs/src/jobs.ts`               |
+| Unfinished evidence upload | 24 hours                                   | `services/dispute-engine/src/evidence.ts` |
+| Deleted evidence versions  | 7 days                                     | `infra/terraform/data.tf` (lifecycle)     |
 
 ## Score bands
 
