@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -12,6 +12,7 @@ import {
 } from '../lib/api-client';
 import { MIN_DESCRIPTION } from '../lib/disputes';
 import { BUREAU_LABELS, type Dispute } from '../lib/types';
+import { EvidenceSection } from './EvidenceSection';
 import { Button, Notice, PageShell } from './ui';
 
 /** Review a saved draft's letter, then send, edit or delete it. */
@@ -24,6 +25,8 @@ export function DraftReview({ id }: { id: string }) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [busy, setBusy] = useState<'send' | 'save' | 'delete' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [uploadsPending, setUploadsPending] = useState(false);
+  const onPendingChange = useCallback((p: boolean) => setUploadsPending(p), []);
 
   useEffect(() => {
     getDispute(id)
@@ -135,6 +138,13 @@ export function DraftReview({ id }: { id: string }) {
         {draft.letterContent}
       </pre>
 
+      <EvidenceSection
+        dispute={draft}
+        onChange={setDraft}
+        onPendingChange={onPendingChange}
+        disabled={busy !== null}
+      />
+
       {confirmingDelete ? (
         <div className="flex flex-col gap-3 rounded-xl border border-border-default bg-bg-surface p-4">
           <p className="text-sm font-medium text-text-primary">
@@ -168,8 +178,15 @@ export function DraftReview({ id }: { id: string }) {
         </div>
       ) : (
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+          {uploadsPending && (
+            <p id="send-blocked-hint" className="w-full text-sm text-text-secondary">
+              Finish or remove your uploads before sending.
+            </p>
+          )}
           <Button
             busy={busy === 'send'}
+            disabled={uploadsPending}
+            aria-describedby={uploadsPending ? 'send-blocked-hint' : undefined}
             onClick={() =>
               run(
                 'send',

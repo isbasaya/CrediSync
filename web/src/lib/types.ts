@@ -109,6 +109,15 @@ export const DISPUTE_STATUS_LABELS: Record<DisputeStatus, string> = {
   escalated_ncr: 'Escalated',
 };
 
+/** Mirrors `DisputeEvidence` in @credisync/types. Storage keys are never sent to clients. */
+export interface DisputeEvidence {
+  id: string;
+  displayName: string;
+  contentType: string;
+  sizeBytes: number;
+  status: 'pending' | 'verified';
+}
+
 export interface Dispute {
   id: string;
   bureauAccountId: string;
@@ -117,6 +126,8 @@ export interface Dispute {
   disputeDescription: string;
   status: DisputeStatus;
   letterContent: string | null;
+  /** Absent on older list responses; treat as empty. */
+  evidence?: DisputeEvidence[];
   submittedAt: string | null;
   resolutionDeadline: string | null;
   deadlineBreachedAt: string | null;

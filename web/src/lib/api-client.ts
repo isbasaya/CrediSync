@@ -2,6 +2,7 @@ import type {
   BureauAccountSummary,
   CreditProfileSummary,
   Dispute,
+  DisputeEvidence,
   DisputeReason,
   Me,
   RefreshResponse,
@@ -53,6 +54,10 @@ const FRIENDLY: Record<string, string> = {
   rate_limit_exceeded: 'Too many attempts. Please wait a minute and try again.',
   upstream_timeout: 'This is taking longer than usual. Please try again in a moment.',
   upstream_unavailable: 'We can’t reach this service right now. Please try again shortly.',
+  evidence_pending: 'Finish or remove your uploads before sending.',
+  evidence_limit: 'You can attach up to 10 files to a dispute.',
+  evidence_upload_expired: 'This upload expired. Remove it and add the file again.',
+  evidence_not_uploaded: 'We haven’t received this file yet. Try uploading it again.',
 };
 
 export function describeError(err: unknown, fallback: string): string {
@@ -166,6 +171,62 @@ export const deleteDispute = (id: string) =>
   request<void>(`/disputes/${encodeURIComponent(id)}`, { method: 'DELETE' });
 export const escalateDispute = (id: string, caseNumber: string) =>
   post<Dispute>(`/disputes/${encodeURIComponent(id)}/escalate`, { caseNumber });
+
+// --- Dispute evidence -------------------------------------------------------
+export interface EvidenceUpload {
+  evidence: DisputeEvidence;
+  uploadUrl: string;
+  requiredHeaders: Record<string, string>;
+  expiresIn: number;
+}
+const evidencePath = (disputeId: string, evidenceId?: string) =>
+  `/disputes/${encodeURIComponent(disputeId)}/evidence` +
+  (evidenceId ? `/${encodeURIComponent(evidenceId)}` : '');
+
+export const requestEvidenceUpload = (
+  disputeId: string,
+  file: { contentType: string; contentLength: number; fileName: string },
+) => post<EvidenceUpload>(evidencePath(disputeId), file);
+/** A fresh upload link for a file that is still pending. */
+export const retryEvidenceUpload = (disputeId: string, evidenceId: string) =>
+  post<EvidenceUpload>(`${evidencePath(disputeId, evidenceId)}/retry`);
+export const completeEvidence = (disputeId: string, evidenceId: string) =>
+  post<Dispute>(`${evidencePath(disputeId, evidenceId)}/complete`);
+export const removeEvidence = (disputeId: string, evidenceId: string) =>
+  request<Dispute>(evidencePath(disputeId, evidenceId), { method: 'DELETE' });
+export const evidenceDownloadUrl = (disputeId: string, evidenceId: string) =>
+  request<{ url: string; expiresIn: number }>(
+    `${evidencePath(disputeId, evidenceId)}/download-url`,
+  );
+
+/**
+ * Uploads straight to storage with the presigned URL. XHR rather than fetch because fetch
+ * has no upload progress. Credentials are never sent: the URL carries its own signature.
+ */
+export function putEvidenceFile(
+  url: string,
+  headers: Record<string, string>,
+  file: Blob,
+  onProgress: (pct: number) => void,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', url);
+    xhr.withCredentials = false;
+    for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v);
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && e.total > 0) onProgress(Math.round((e.loaded / e.total) * 100));
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        onProgress(100);
+        resolve();
+      } else reject(new Error(`upload_failed_${xhr.status}`));
+    };
+    xhr.onerror = () => reject(new Error('upload_network_error'));
+    xhr.send(file);
+  });
+}
 
 // --- Open banking -----------------------------------------------------------
 export interface BankLink {
