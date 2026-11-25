@@ -20,6 +20,96 @@ interface Dispute {
   deadline_breached_at: string | null;
   bureau_reference: string | null;
   creditor_name: string;
+  /** Verified files only, and only once the dispute has been sent. */
+  evidence: Evidence[];
+}
+
+interface Evidence {
+  id: string;
+  displayName: string;
+  contentType: string;
+  sizeBytes: number;
+}
+
+const TYPE_LABELS: Record<string, string> = {
+  'application/pdf': 'PDF',
+  'image/jpeg': 'JPEG',
+  'image/png': 'PNG',
+};
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const kb = bytes / 1024;
+  return kb < 1024 ? `${Number(kb.toFixed(1))} KB` : `${Number((kb / 1024).toFixed(1))} MB`;
+}
+
+/**
+ * Consumer evidence to enclose when lodging. Each download asks for a fresh 5-minute link,
+ * which the API logs against the signed-in staff member.
+ */
+function EvidenceList({ disputeId, files }: { disputeId: string; files: Evidence[] }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [failed, setFailed] = useState<Evidence | null>(null);
+
+  async function download(file: Evidence) {
+    setBusy(file.id);
+    setFailed(null);
+    try {
+      const { url } = await api.get<{ url: string }>(
+        `/admin/disputes/${encodeURIComponent(disputeId)}/evidence/${encodeURIComponent(file.id)}/download-url`,
+      );
+      // Served as an attachment, so the browser saves it and stays on this page.
+      window.location.assign(url);
+    } catch {
+      setFailed(file);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <section aria-labelledby="evidence-heading" className="mt-6">
+      <h3 id="evidence-heading" className="text-sm font-semibold text-text-primary">
+        Consumer evidence
+      </h3>
+      <p className="mt-1 text-xs text-text-muted">
+        Files come from consumers and are not malware-scanned yet.
+      </p>
+      {failed ? (
+        <LoadError
+          message={`Couldn’t get a download link for ${failed.displayName}.`}
+          onRetry={() => void download(failed)}
+        />
+      ) : files.length === 0 ? (
+        <p className="mt-3 text-sm text-text-secondary">No evidence attached</p>
+      ) : (
+        <ul className="mt-3 divide-y divide-border-default rounded-lg border border-border-default">
+          {files.map((f) => (
+            <li key={f.id} className="flex items-center gap-3 px-3 py-2">
+              <div className="min-w-0 flex-1">
+                {/* Names come from consumers' devices: plain text only. */}
+                <p className="text-sm font-medium text-text-primary [overflow-wrap:anywhere]">
+                  {f.displayName}
+                </p>
+                <p className="text-xs text-text-muted">
+                  {TYPE_LABELS[f.contentType] ?? f.contentType} · {formatSize(f.sizeBytes)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void download(f)}
+                disabled={busy !== null}
+                aria-label={`Download ${f.displayName}`}
+                className="cursor-pointer rounded-lg border border-border-default px-3 py-2 text-sm font-semibold text-text-primary hover:border-teal-700 disabled:opacity-50"
+              >
+                {busy === f.id ? 'Preparing…' : 'Download'}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
 }
 
 interface DisputesResponse {
@@ -168,6 +258,7 @@ function DisputeUpdatePanel({
         </a>{' '}
         — contains the consumer’s full ID number. Downloads are logged against your account.
       </p>
+      <EvidenceList disputeId={dispute.id} files={dispute.evidence ?? []} />
       {error && <p className="mt-4 text-sm font-medium text-status-very-poor-fg">{error}</p>}
       <button
         type="button"

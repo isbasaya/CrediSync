@@ -148,7 +148,17 @@ export function createAdminRouter(pool: Pool, config: GatewayConfig): Router {
           );
           const rows = await client.query(
             `SELECT d.id, d.user_id, d.bureau, d.dispute_reason, d.status, d.created_at, d.submitted_at,
-                    d.resolution_deadline, d.deadline_breached_at, d.bureau_reference, ba.creditor_name
+                    d.resolution_deadline, d.deadline_breached_at, d.bureau_reference, ba.creditor_name,
+                    -- Staff see verified evidence only once a dispute is sent (the download
+                    -- route refuses drafts too). Storage keys never leave the database.
+                    COALESCE((
+                      SELECT json_agg(json_build_object(
+                               'id', e.id, 'displayName', e.display_name,
+                               'contentType', e.content_type, 'sizeBytes', e.size_bytes)
+                             ORDER BY e.created_at)
+                      FROM credisync.dispute_evidence e
+                      WHERE e.dispute_id = d.id AND e.status = 'verified' AND d.status <> 'draft'
+                    ), '[]'::json) AS evidence
              FROM credisync.disputes d JOIN credisync.bureau_accounts ba ON ba.id = d.bureau_account_id
              ${where}
              ORDER BY d.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
