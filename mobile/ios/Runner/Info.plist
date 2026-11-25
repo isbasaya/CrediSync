@@ -66,5 +66,9 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>CrediSync uses the camera only when you choose to photograph a document, such as a paid-up letter, to support a credit dispute.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>CrediSync opens your photos only when you choose one to attach as evidence to a credit dispute.</string>
 </dict>
 </plist>

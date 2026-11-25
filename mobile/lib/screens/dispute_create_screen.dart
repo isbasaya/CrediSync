@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/dispute_service.dart';
 import '../services/api_client.dart';
 import '../services/credit_profile_service.dart';
+import 'dispute_review_screen.dart';
 
 class DisputeCreateScreen extends StatefulWidget {
   const DisputeCreateScreen({super.key});
@@ -71,24 +72,12 @@ class _DisputeCreateScreenState extends State<DisputeCreateScreen> {
         description: _descriptionController.text.trim(),
       );
       if (!mounted) return;
-      final send = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Check your dispute letter'),
-          content: SingleChildScrollView(child: Text(draft.letterContent ?? '', style: const TextStyle(fontSize: 13))),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Keep as draft')),
-            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Send to bureau')),
-          ],
-        ),
+      // The draft is saved; review, attach evidence and send (or keep) on the next screen.
+      await Navigator.pushReplacement<bool, bool>(
+        context,
+        MaterialPageRoute(builder: (_) => DisputeReviewScreen(disputeId: draft.id)),
+        result: true,
       );
-      if (send == true) await DisputeService.submitDispute(draft.id);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(send == true ? 'Dispute sent. The bureau must respond within 20 business days.' : 'Saved as a draft')),
-        );
-        Navigator.pop(context, true);
-      }
     } on ApiError catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

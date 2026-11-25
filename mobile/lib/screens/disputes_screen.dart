@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/dispute_service.dart';
 import '../theme/app_theme.dart';
+import 'dispute_review_screen.dart';
 
 class DisputesScreen extends StatefulWidget {
   const DisputesScreen({super.key});
@@ -44,7 +45,10 @@ class _DisputesScreenState extends State<DisputesScreen> {
         elevation: 0,
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => Navigator.pushNamed(context, '/dispute-create'),
+        onPressed: () async {
+          final changed = await Navigator.pushNamed(context, '/dispute-create');
+          if (changed == true) _loadDisputes();
+        },
         backgroundColor: const Color(0xFF0B7A70),
         child: const Icon(Icons.add, color: Colors.white),
       ),
@@ -72,7 +76,7 @@ class _DisputesScreenState extends State<DisputesScreen> {
                         itemBuilder: (context, index) {
                           final dispute = _disputes[index];
                           final statusTheme = DisputeStatusTheme.forStatus(dispute.status);
-                          return Container(
+                          final card = Container(
                             margin: const EdgeInsets.only(bottom: 12),
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
@@ -113,8 +117,27 @@ class _DisputesScreenState extends State<DisputesScreen> {
                                   'Created: ${dispute.createdAt}',
                                   style: const TextStyle(color: Color(0xFF6B7684), fontSize: 12),
                                 ),
+                                if (dispute.isDraft) ...[
+                                  const SizedBox(height: 8),
+                                  const Text(
+                                    'Draft · Tap to review, attach documents and send',
+                                    style: TextStyle(color: Color(0xFF0B7A70), fontSize: 12, fontWeight: FontWeight.w600),
+                                  ),
+                                ],
                               ],
                             ),
+                          );
+                          if (!dispute.isDraft) return card;
+                          return InkWell(
+                            borderRadius: BorderRadius.circular(16),
+                            onTap: () async {
+                              final changed = await Navigator.push<bool>(
+                                context,
+                                MaterialPageRoute(builder: (_) => DisputeReviewScreen(disputeId: dispute.id)),
+                              );
+                              if (changed == true) _loadDisputes();
+                            },
+                            child: card,
                           );
                         },
                       ),

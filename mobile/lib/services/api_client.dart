@@ -129,6 +129,7 @@ class ApiClient {
       (await _send('POST', path, body: body, auth: auth)) as Map<String, dynamic>;
   static Future<Map<String, dynamic>> patch(String path, Map<String, dynamic> body) async =>
       (await _send('PATCH', path, body: body)) as Map<String, dynamic>;
+  static Future<Map<String, dynamic>> delete(String path) async => (await _send('DELETE', path)) as Map<String, dynamic>;
 
   static String? friendlyMessage(String code) => const {
         'invalid_credentials': 'That email and password don’t match, or the account is temporarily locked.',
@@ -139,5 +140,10 @@ class ApiClient {
         'refresh_too_soon': 'Your reports were refreshed recently. Try again in about an hour.',
         'dispute_already_open': 'There’s already an open dispute for this account.',
         'rate_limit_exceeded': 'Too many attempts. Please wait a minute.',
+        'evidence_pending': 'Finish or remove your uploads before sending.',
+        'evidence_limit': 'You can attach up to 10 files to a dispute.',
+        'evidence_upload_expired': 'This upload expired. Remove it and add the file again.',
+        'evidence_not_uploaded': 'We haven’t received this file yet. Try uploading it again.',
+        'not_editable': 'This dispute has already been sent, so it can’t be changed.',
       }[code];
 }
