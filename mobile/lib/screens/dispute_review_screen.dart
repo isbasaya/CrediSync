@@ -1,8 +1,8 @@
 import 'dart:typed_data';
 
-import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import 'package:file_selector/file_selector.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../services/api_client.dart';
 import '../services/dispute_service.dart';
@@ -148,28 +148,39 @@ class _DisputeReviewScreenState extends State<DisputeReviewScreen> {
     }
   }
 
+  /// Android filters by MIME type, iOS by uniform type identifier, other platforms by
+  /// extension, so the group names all three.
+  static const _evidenceTypes = XTypeGroup(
+    label: 'PDF, JPEG or PNG',
+    extensions: evidenceExtensions,
+    mimeTypes: evidenceContentTypes,
+    uniformTypeIdentifiers: ['com.adobe.pdf', 'public.jpeg', 'public.png'],
+  );
+
   Future<void> _pickFiles() async {
-    final FilePickerResult? result;
+    final List<XFile> files;
     try {
-      result = await FilePicker.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: evidenceExtensions,
-        allowMultiple: true,
-        withData: true,
-      );
+      files = await openFiles(acceptedTypeGroups: const [_evidenceTypes]);
     } catch (_) {
       _announce('We couldn’t open your files.');
       return;
     }
-    if (result == null) return;
     var used = _slotsUsed;
-    for (final f in result.files) {
-      final bytes = f.bytes;
-      if (bytes == null) {
-        _addRejected(f.name, f.size, 'We couldn’t read this file. Try another.');
-        continue;
+    for (final f in files) {
+      final type = contentTypeForName(f.name);
+      try {
+        // Check the size before reading, so a huge file never lands in memory on a
+        // budget phone.
+        final size = await f.length();
+        final invalid = validateEvidence(type, size, used);
+        if (invalid != null) {
+          _addRejected(f.name, size, invalid);
+          continue;
+        }
+        await _start(f.name, type, await f.readAsBytes(), used++);
+      } catch (_) {
+        _addRejected(f.name, 0, 'We couldn’t read this file. Try another.');
       }
-      await _start(f.name, contentTypeForName(f.name), bytes, used++);
     }
   }
 

@@ -87,10 +87,9 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-          # Pinned so analyze results match local runs. Newer stable releases deprecate
-          # package:flutter/material.dart in favour of package:material_ui; move to that
-          # deliberately, then bump this.
-          flutter-version: 3.47.0
+          # Pinned so analyze results match local runs. Bump deliberately, together with
+          # a local `flutter analyze` and `flutter test` on the new version.
+          flutter-version: 3.50.1
           cache: true
       - run: flutter pub get
       - run: flutter analyze

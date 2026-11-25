@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import '../services/dispute_service.dart';
 import '../theme/app_theme.dart';
 import 'dispute_review_screen.dart';
